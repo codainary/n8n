@@ -1,0 +1,31 @@
+# ==========================================
+# n8n Gitignore
+# ==========================================
+
+# Environment files (NEVER commit these!)
+.env
+.env.*
+!.env.example
+
+# n8n data files
+n8n/config
+n8n/database.sqlite
+n8n/crash.journal
+n8n/*.log
+n8n/binaryData/*
+
+# Docker volumes
+postgres_data/
+redis_data/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
