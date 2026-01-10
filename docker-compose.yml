@@ -6,6 +6,8 @@ services:
     image: postgres:16-alpine
     container_name: n8n-postgres
     restart: always
+    ports:
+      - "5432:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -220,6 +222,30 @@ services:
         limits:
           cpus: '1'
           memory: 1G
+
+  # ==========================================
+  # PostgreSQL with pgvector for AI/Embeddings
+  # ==========================================
+  postgres-vector:
+    image: pgvector/pgvector:pg16
+    container_name: n8n-postgres-vector
+    restart: always
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=vector_user
+      - POSTGRES_PASSWORD=vector_password
+      - POSTGRES_DB=vector_db
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vector_user -d vector_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - n8n-network
 
 # ==========================================
 # Volumes
