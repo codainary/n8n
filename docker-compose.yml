@@ -44,7 +44,7 @@ services:
   # n8n Main Instance (Webhooks & UI)
   # ==========================================
   n8n:
-    image: n8nio/n8n:1.123.5
+    image: n8nio/n8n:1.123.30
     container_name: n8n-main
     restart: always
     ports:
@@ -117,7 +117,7 @@ services:
   # n8n Worker 1
   # ==========================================
   n8n-worker-1:
-    image: n8nio/n8n:1.123.5
+    image: n8nio/n8n:1.123.30
     container_name: n8n-worker-1
     restart: always
     command: worker
@@ -172,7 +172,7 @@ services:
   # n8n Worker 2
   # ==========================================
   n8n-worker-2:
-    image: n8nio/n8n:1.123.5
+    image: n8nio/n8n:1.123.30
     container_name: n8n-worker-2
     restart: always
     command: worker
