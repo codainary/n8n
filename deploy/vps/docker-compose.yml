@@ -1,0 +1,123 @@
+# ==========================================
+# n8n en el VPS de producción (/home/deploy/n8n/docker-compose.yml)
+# Versión reducida para 1 vCPU / 4 GB compartidos con automaverso.com:
+#   n8n         → modo normal (sin Redis ni workers): UI, API, webhooks y ejecuciones.
+#   n8n-runner  → task runners externos (nodos Code JS / Python).
+#   n8n-db      → Postgres propio de n8n, sin puertos publicados.
+# Entrada: túnel de Cloudflare del proyecto automaverso (n8n.automaverso.com → http://n8n:5678).
+# Solo el contenedor n8n se une a la red del túnel (automaverso_internal); la base queda aislada.
+# Sin puertos publicados en el host.
+# ==========================================
+
+name: n8n
+
+x-n8n-image: &n8n-image n8nio/n8n:2.47.7
+x-runners-image: &runners-image n8nio/runners:2.47.7
+
+services:
+  n8n-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=30"]
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 256m
+    networks: [n8n]
+
+  n8n:
+    image: *n8n-image
+    restart: unless-stopped
+    environment:
+      # Base de datos
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: n8n-db
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      # Seguridad (la misma clave que la instancia local: si cambia se pierden las credenciales)
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      N8N_USER_MANAGEMENT_JWT_DURATION_HOURS: ${N8N_USER_MANAGEMENT_JWT_DURATION_HOURS:-168}
+      # URL pública detrás del túnel (TLS en Cloudflare)
+      N8N_HOST: ${N8N_HOST}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://${N8N_HOST}/
+      N8N_EDITOR_BASE_URL: https://${N8N_HOST}/
+      N8N_SECURE_COOKIE: "true"
+      N8N_PROXY_HOPS: 1
+      # Task runners externos (sidecar n8n-runner)
+      N8N_RUNNERS_MODE: external
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+      N8N_RUNNERS_BROKER_LISTEN_ADDRESS: 0.0.0.0
+      N8N_NATIVE_PYTHON_RUNNER: "true"
+      # Ejecuciones: binarios en disco, retención corta y solo lo útil
+      N8N_DEFAULT_BINARY_DATA_MODE: filesystem
+      N8N_PAYLOAD_SIZE_MAX: 16
+      EXECUTIONS_DATA_SAVE_ON_ERROR: all
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: none
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: "true"
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: 168
+      EXECUTIONS_DATA_PRUNE_MAX_COUNT: 10000
+      N8N_CONCURRENCY_PRODUCTION_LIMIT: 5
+      # Sin telemetría ni banners de versión
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      # Zona horaria y logs
+      GENERIC_TIMEZONE: ${TIMEZONE}
+      TZ: ${TIMEZONE}
+      N8N_LOG_LEVEL: info
+      NODE_OPTIONS: --max-old-space-size=640
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      n8n-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5678/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    mem_limit: 768m
+    cpus: 0.8
+    networks:
+      n8n: {}
+      tunnel:
+        aliases: [n8n]
+
+  n8n-runner:
+    image: *runners-image
+    restart: unless-stopped
+    environment:
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
+      N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: 15
+    depends_on:
+      - n8n
+    mem_limit: 256m
+    cpus: 0.5
+    networks: [n8n]
+
+volumes:
+  db_data:
+  n8n_data:
+
+networks:
+  n8n: {}
+  # Red del proyecto automaverso, donde vive cloudflared.
+  tunnel:
+    external: true
+    name: automaverso_internal
