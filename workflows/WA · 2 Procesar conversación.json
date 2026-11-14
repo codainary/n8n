@@ -1,0 +1,975 @@
+{
+  "id": "WeuOkYYJBMirw5gp",
+  "name": "WA · 2 Procesar conversación",
+  "active": true,
+  "nodes": [
+    {
+      "id": "p1",
+      "name": "Entrada",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "wa_id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "p2",
+      "name": "Esperar ráfaga (4 s)",
+      "webhookId": "0c1d2e3f-4a5b-4c6d-8e7f-wa0000000002",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 4,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "p3",
+      "name": "Tomar ráfaga (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT m.id::int AS message_id, m.wa_id, m.msg_type, COALESCE(m.text_body, '') AS text_body, COALESCE(m.caption, '') AS caption,\n       m.media_id::int AS media_id, COALESCE(md.meta_media_id, '') AS meta_media_id, COALESCE(md.mime_type, '') AS media_mime,\n       COALESCE(md.file_name, '') AS media_file_name, m.batch_id::text AS batch_id, m.meta_timestamp\n  FROM chatbot.claim_pending($1) m\n  LEFT JOIN chatbot.media md ON md.id = m.media_id\n ORDER BY m.meta_timestamp, m.id",
+        "options": {
+          "queryReplacement": "={{ [ $('Entrada').item.json.wa_id ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "p4",
+      "name": "Enriquecer cada mensaje",
+      "notes": "Si falla un medio (descarga/transcripción/visión), el siguiente nodo registra el error en chatbot.messages.error y deja un agent_text honesto; la ráfaga sigue.",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "onError": "continueRegularOutput",
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "H8HQb0awSMdfheGw"
+        },
+        "mode": "each",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "message_id": "={{ $json.message_id }}",
+            "wa_id": "={{ $json.wa_id }}",
+            "msg_type": "={{ $json.msg_type }}",
+            "text_body": "={{ $json.text_body }}",
+            "caption": "={{ $json.caption }}",
+            "media_id": "={{ $json.media_id }}",
+            "meta_media_id": "={{ $json.meta_media_id }}",
+            "media_mime": "={{ $json.media_mime }}",
+            "media_file_name": "={{ $json.media_file_name }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "message_id",
+              "displayName": "message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number"
+            },
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "msg_type",
+              "displayName": "msg_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "text_body",
+              "displayName": "text_body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "caption",
+              "displayName": "caption",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "media_id",
+              "displayName": "media_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number"
+            },
+            {
+              "id": "meta_media_id",
+              "displayName": "meta_media_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "media_mime",
+              "displayName": "media_mime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "media_file_name",
+              "displayName": "media_file_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "p5",
+      "name": "Preparar contexto (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT $1::text AS wa_id,\n       $2::text AS batch_id,\n       chatbot.config('wa_phone_number_id') AS phone_number_id,\n       chatbot.config('elevenlabs_voice_id') AS voice_id,\n       (SELECT string_agg(CASE role WHEN 'user' THEN 'Usuario: ' ELSE 'Asistente: ' END || content, E'\\n' ORDER BY at)\n          FROM chatbot.agent_context($1, 30)) AS transcript,\n       (SELECT msg_type FROM chatbot.messages WHERE batch_id = $2::uuid ORDER BY meta_timestamp DESC, id DESC LIMIT 1) AS last_type,\n       (SELECT bool_and(msg_type NOT IN ('text', 'audio', 'image', 'document')) FROM chatbot.messages WHERE batch_id = $2::uuid) AS only_unsupported",
+        "options": {
+          "queryReplacement": "={{ [ $('Entrada').first().json.wa_id, $('Tomar ráfaga (SQL)').first().json.batch_id ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "p6",
+      "name": "¿Solo formatos no soportados?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "u1",
+              "leftValue": "={{ $json.only_unsupported }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "p7",
+      "name": "Mensaje fijo",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1340,
+        140
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1",
+              "name": "output",
+              "type": "string",
+              "value": "Por ahora solo puedo entender mensajes de texto, notas de voz, imágenes y documentos. ¿Me lo puedes enviar en alguno de esos formatos? 🙏"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "p8",
+      "name": "Agente IA",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1340,
+        400
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Conversación por WhatsApp (de la más antigua a la más reciente):\n{{ $json.transcript }}\n\nResponde al último mensaje (o grupo de mensajes) del usuario.",
+        "options": {
+          "systemMessage": "Eres el asistente de WhatsApp de Automaverso. Respondes en español, de forma breve, cálida y natural, como en un chat (máximo 3-4 frases, sin markdown ni listas largas).\n\nCómo leer la conversación:\n- [Nota de voz] = el usuario habló; el texto es la transcripción.\n- [Imagen] = descripción de la foto que envió el usuario.\n- [Documento recibido: ...] = el usuario envió un archivo; confirma que lo recibiste y quedó guardado.\n- [Formato no soportado: ...] = indica amablemente que solo entiendes texto, voz, imágenes y documentos.\n\n- [audio: no se pudo procesar el archivo] (o imagen/documento) = hubo un fallo técnico; dilo con honestidad y pide que lo reenvíen.\n- Si un mensaje aparece solo como [audio] o [image] sin descripción, NO adivines su contenido.\n\nNunca inventes el contenido de un archivo que no puedes ver ni escuchar. No inventes datos de la empresa, precios ni compromisos. Si no sabes algo, dilo y ofrece que una persona del equipo lo revise."
+        }
+      }
+    },
+    {
+      "id": "p9",
+      "name": "Modelo OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1340,
+        600
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 400
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "sevrRORNVNDEXyvj",
+          "name": "OpenAI (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "p10",
+      "name": "¿Responder con audio?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1580,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "v1",
+              "leftValue": "={{ $('Preparar contexto (SQL)').first().json.last_type }}",
+              "rightValue": "audio",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "p11",
+      "name": "Voz (ElevenLabs)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        1820,
+        160
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.elevenlabs.io/v1/text-to-speech/{{ $('Preparar contexto (SQL)').first().json.voice_id }}?output_format=opus_48000_64",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.output, model_id: 'eleven_multilingual_v2' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PVfQKs5f7KqjAcWf",
+          "name": "ElevenLabs API"
+        }
+      }
+    },
+    {
+      "id": "p12",
+      "name": "Nombrar respuesta .ogg",
+      "notes": "Why Code: ElevenLabs devuelve audio/opus sin nombre; WhatsApp solo acepta notas de voz como audio/ogg (codec opus) y valida el mime del archivo subido. Ningún nodo nativo cambia los metadatos de un binario.",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2040,
+        160
+      ],
+      "parameters": {
+        "jsCode": "for (const item of $input.all()) {\n  item.binary.data.mimeType = 'audio/ogg';\n  item.binary.data.fileName = 'respuesta.ogg';\n  item.binary.data.fileExtension = 'ogg';\n}\nreturn $input.all();"
+      }
+    },
+    {
+      "id": "p13",
+      "name": "Audio a base64",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        2260,
+        160
+      ],
+      "parameters": {
+        "operation": "binaryToPropery",
+        "binaryPropertyName": "data",
+        "destinationKey": "b64",
+        "options": {
+          "keepSource": "both"
+        }
+      }
+    },
+    {
+      "id": "p14",
+      "name": "Subir audio a WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        2480,
+        160
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $('Preparar contexto (SQL)').first().json.phone_number_id }}/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "type",
+              "value": "audio/ogg"
+            },
+            {
+              "name": "messaging_product",
+              "value": "whatsapp"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "p15",
+      "name": "Enviar audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        2700,
+        160
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $('Preparar contexto (SQL)').first().json.phone_number_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Preparar contexto (SQL)').first().json.wa_id, type: 'audio', audio: { id: $json.id } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "p16",
+      "name": "Registrar audio saliente (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        2920,
+        160
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH md AS (SELECT chatbot.store_outbound_media($1, 'audio/ogg', 'respuesta.ogg', $2) AS id)\nSELECT r.* FROM md, chatbot.register_outbound(jsonb_build_object(\n  'wamid', $3, 'wa_id', $4, 'type', 'audio', 'media_id', md.id, 'agent_text', $5,\n  'reply_to_batch_id', $6, 'raw', $7::jsonb)) r",
+        "options": {
+          "queryReplacement": "={{ [ $('Audio a base64').item.json.b64, $('Subir audio a WhatsApp').item.json.id, $json.messages[0].id, $('Preparar contexto (SQL)').first().json.wa_id, $('Agente IA').isExecuted ? $('Agente IA').first().json.output : $('Mensaje fijo').first().json.output, $('Preparar contexto (SQL)').first().json.batch_id, JSON.stringify($json) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "p17",
+      "name": "Enviar texto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        1820,
+        440
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $('Preparar contexto (SQL)').first().json.phone_number_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Preparar contexto (SQL)').first().json.wa_id, type: 'text', text: { preview_url: false, body: $json.output } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "p18",
+      "name": "Registrar texto saliente (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        2040,
+        440
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT r.* FROM chatbot.register_outbound(jsonb_build_object(\n  'wamid', $1, 'wa_id', $2, 'type', 'text', 'text', $3, 'reply_to_batch_id', $4, 'raw', $5::jsonb)) r",
+        "options": {
+          "queryReplacement": "={{ [ $json.messages[0].id, $('Preparar contexto (SQL)').first().json.wa_id, $('Agente IA').isExecuted ? $('Agente IA').first().json.output : $('Mensaje fijo').first().json.output, $('Preparar contexto (SQL)').first().json.batch_id, JSON.stringify($json) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "p19",
+      "name": "Cerrar ráfaga (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        3160,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT chatbot.finish_batch($1::uuid, 'done') AS closed,\n       (SELECT count(*)::int FROM chatbot.messages\n         WHERE wa_id = $2 AND direction = 'in' AND processing_state = 'pending') AS pending,\n       $2::text AS wa_id",
+        "options": {
+          "queryReplacement": "={{ [ $('Preparar contexto (SQL)').first().json.batch_id, $('Preparar contexto (SQL)').first().json.wa_id ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "p20",
+      "name": "¿Llegaron más mensajes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3380,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "q1",
+              "leftValue": "={{ $json.pending }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "p21",
+      "name": "Procesar siguiente ráfaga",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        3600,
+        220
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $workflow.id }}"
+        },
+        "mode": "once",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "wa_id": "={{ $json.wa_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "n1",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -40
+      ],
+      "parameters": {
+        "width": 700,
+        "height": 240,
+        "content": "## WA · 2 Procesar conversación\n1. Espera 4 s y **toma la ráfaga** de pendientes del número (claim_pending: lock por usuario, orden por timestamp Meta; otras ejecuciones concurrentes reciben 0 filas y terminan).\n2. Enriquece cada mensaje (WA · 3).\n3. Contexto = historial reconstruido desde `chatbot.messages` (sin memoria en RAM: sobrevive reinicios).\n4. Salida espejo: último mensaje de audio → nota de voz (ElevenLabs); si no → texto.\n5. Registra el saliente con su wamid y cierra la ráfaga. Si llegaron más mientras tanto, se re-invoca.\nSi algo falla, la ráfaga queda en `processing` y **WA · 4 Mantenimiento** la reintenta (máx. 3)."
+      }
+    },
+    {
+      "id": "p4b",
+      "name": "Registrar resultado enriquecimiento (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        770,
+        480
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE chatbot.messages\n   SET error = CASE WHEN $2 <> '' THEN COALESCE(error, '{}'::jsonb) || jsonb_build_object('enrich_error', $2, 'enrich_at', now()) ELSE error END,\n       agent_text = CASE WHEN $2 <> '' AND agent_text IS NULL\n                         THEN '[' || msg_type || ': no se pudo procesar el archivo]' ELSE agent_text END\n WHERE id = $1::bigint\nRETURNING id, msg_type, (error ? 'enrich_error') AS failed",
+        "options": {
+          "queryReplacement": "={{ [ $('Tomar ráfaga (SQL)').item.json.message_id, $json.error ? (typeof $json.error === 'string' ? $json.error : ($json.error.message || JSON.stringify($json.error))) : '' ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Entrada": {
+      "main": [
+        [
+          {
+            "node": "Esperar ráfaga (4 s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar ráfaga (4 s)": {
+      "main": [
+        [
+          {
+            "node": "Tomar ráfaga (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tomar ráfaga (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Enriquecer cada mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar contexto (SQL)": {
+      "main": [
+        [
+          {
+            "node": "¿Solo formatos no soportados?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Solo formatos no soportados?": {
+      "main": [
+        [
+          {
+            "node": "Mensaje fijo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Agente IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensaje fijo": {
+      "main": [
+        [
+          {
+            "node": "Enviar texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo OpenAI": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente IA",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente IA": {
+      "main": [
+        [
+          {
+            "node": "¿Responder con audio?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Responder con audio?": {
+      "main": [
+        [
+          {
+            "node": "Voz (ElevenLabs)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voz (ElevenLabs)": {
+      "main": [
+        [
+          {
+            "node": "Nombrar respuesta .ogg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nombrar respuesta .ogg": {
+      "main": [
+        [
+          {
+            "node": "Audio a base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audio a base64": {
+      "main": [
+        [
+          {
+            "node": "Subir audio a WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subir audio a WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Enviar audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar audio": {
+      "main": [
+        [
+          {
+            "node": "Registrar audio saliente (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar audio saliente (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Cerrar ráfaga (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar texto": {
+      "main": [
+        [
+          {
+            "node": "Registrar texto saliente (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar texto saliente (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Cerrar ráfaga (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cerrar ráfaga (SQL)": {
+      "main": [
+        [
+          {
+            "node": "¿Llegaron más mensajes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Llegaron más mensajes?": {
+      "main": [
+        [
+          {
+            "node": "Procesar siguiente ráfaga",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Enriquecer cada mensaje": {
+      "main": [
+        [
+          {
+            "node": "Registrar resultado enriquecimiento (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar resultado enriquecimiento (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Preparar contexto (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionOrder": "v1"
+  },
+  "pinData": null,
+  "staticData": null,
+  "tags": []
+}

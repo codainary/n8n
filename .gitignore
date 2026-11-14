@@ -32,3 +32,6 @@ logs/
 tmp/
 # Backups de base de datos
 backups/
+
+# Claves (cuentas de servicio, etc.)
+secrets/

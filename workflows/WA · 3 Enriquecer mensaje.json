@@ -1,0 +1,756 @@
+{
+  "id": "H8HQb0awSMdfheGw",
+  "name": "WA · 3 Enriquecer mensaje",
+  "active": true,
+  "nodes": [
+    {
+      "id": "e1",
+      "name": "Entrada",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "message_id",
+              "type": "number"
+            },
+            {
+              "name": "wa_id",
+              "type": "string"
+            },
+            {
+              "name": "msg_type",
+              "type": "string"
+            },
+            {
+              "name": "text_body",
+              "type": "string"
+            },
+            {
+              "name": "caption",
+              "type": "string"
+            },
+            {
+              "name": "media_id",
+              "type": "number"
+            },
+            {
+              "name": "meta_media_id",
+              "type": "string"
+            },
+            {
+              "name": "media_mime",
+              "type": "string"
+            },
+            {
+              "name": "media_file_name",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e2",
+      "name": "Tipo de mensaje",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "renameOutput": true,
+              "outputKey": "texto",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ $json.msg_type }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "renameOutput": true,
+              "outputKey": "multimedia",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r2",
+                    "leftValue": "={{ $json.msg_type }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "r3",
+                    "leftValue": "={{ $json.msg_type }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "r4",
+                    "leftValue": "={{ $json.msg_type }}",
+                    "rightValue": "document",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "no soportado"
+        }
+      }
+    },
+    {
+      "id": "e3",
+      "name": "Texto tal cual",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        520,
+        80
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "agent_text",
+              "type": "string",
+              "value": "={{ $json.text_body }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e4",
+      "name": "Formato no soportado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        520,
+        560
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a2",
+              "name": "agent_text",
+              "type": "string",
+              "value": "=[Formato no soportado: {{ $json.msg_type }}]"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e5",
+      "name": "URL del medio (Meta)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        520,
+        300
+      ],
+      "parameters": {
+        "url": "=https://graph.facebook.com/v23.0/{{ $json.meta_media_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "e6",
+      "name": "Descargar medio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        740,
+        300
+      ],
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "e7",
+      "name": "A base64",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        960,
+        300
+      ],
+      "parameters": {
+        "operation": "binaryToPropery",
+        "binaryPropertyName": "data",
+        "destinationKey": "b64",
+        "options": {
+          "keepSource": "both"
+        }
+      }
+    },
+    {
+      "id": "e8",
+      "name": "Guardar archivo (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        1180,
+        160
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT chatbot.store_media($1::bigint, $2, NULLIF($3, ''), NULLIF($4, '')) AS stored",
+        "options": {
+          "queryReplacement": "={{ [ $('Entrada').item.json.media_id, $json.b64, $('Entrada').item.json.media_mime ?? '', $('Entrada').item.json.media_file_name ?? '' ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "e9",
+      "name": "Tipo de medio",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1180,
+        420
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "renameOutput": true,
+              "outputKey": "audio",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "m1",
+                    "leftValue": "={{ $('Entrada').item.json.msg_type }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "renameOutput": true,
+              "outputKey": "imagen",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "m2",
+                    "leftValue": "={{ $('Entrada').item.json.msg_type }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "documento"
+        }
+      }
+    },
+    {
+      "id": "e10",
+      "name": "Nombrar audio .ogg",
+      "notes": "Why Code: OpenAI detecta el formato por la extensión del archivo y Meta entrega el audio sin nombre. Ningún nodo nativo renombra metadatos de un binario sin re-leerlo.",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1420,
+        300
+      ],
+      "parameters": {
+        "jsCode": "for (const item of $input.all()) {\n  item.binary.data.fileName = 'nota.ogg';\n  item.binary.data.fileExtension = 'ogg';\n}\nreturn $input.all();"
+      }
+    },
+    {
+      "id": "e11",
+      "name": "Transcribir (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        1640,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "model",
+              "value": "gpt-4o-mini-transcribe"
+            },
+            {
+              "name": "language",
+              "value": "es"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "sevrRORNVNDEXyvj",
+          "name": "OpenAI (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "e12",
+      "name": "Texto del audio",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1860,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a3",
+              "name": "agent_text",
+              "type": "string",
+              "value": "=[Nota de voz] {{ $json.text }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e13",
+      "name": "Analizar imagen (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        1420,
+        480
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4.1-mini', max_tokens: 400, messages: [ { role: 'user', content: [ { type: 'text', text: 'Describe en español, de forma breve y objetiva, el contenido de esta imagen. Si contiene texto, transcríbelo.' }, { type: 'image_url', image_url: { url: 'data:' + ($('Entrada').item.json.media_mime || 'image/jpeg') + ';base64,' + $json.b64 } } ] } ] }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "sevrRORNVNDEXyvj",
+          "name": "OpenAI (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "e14",
+      "name": "Texto de la imagen",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1640,
+        480
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a4",
+              "name": "agent_text",
+              "type": "string",
+              "value": "=[Imagen] {{ $json.choices[0].message.content }}{{ $('Entrada').item.json.caption ? ' | Texto del usuario: ' + $('Entrada').item.json.caption : '' }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e15",
+      "name": "Texto del documento",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1420,
+        660
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a5",
+              "name": "agent_text",
+              "type": "string",
+              "value": "=[Documento recibido: {{ $('Entrada').item.json.media_file_name || 'sin nombre' }} ({{ $('Entrada').item.json.media_mime }})]{{ $('Entrada').item.json.caption ? ' | Texto del usuario: ' + $('Entrada').item.json.caption : '' }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e16",
+      "name": "Guardar agent_text (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        2100,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE chatbot.messages SET agent_text = $2 WHERE id = $1::bigint RETURNING id AS message_id, msg_type, agent_text",
+        "options": {
+          "queryReplacement": "={{ [ $('Entrada').item.json.message_id, $json.agent_text ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "n1",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -120
+      ],
+      "parameters": {
+        "width": 520,
+        "height": 200,
+        "content": "## WA · 3 Enriquecer mensaje\nSub-workflow (1 ejecución por mensaje). Convierte cualquier entrante en `agent_text`:\n- texto → tal cual\n- audio → descarga + guarda + transcribe (gpt-4o-mini-transcribe)\n- imagen → descarga + guarda + visión (gpt-4.1-mini)\n- documento → descarga + guarda + descripción\n- otro → `[Formato no soportado]`\nLos medios se descargan YA: las URL de Meta caducan."
+      }
+    }
+  ],
+  "connections": {
+    "Entrada": {
+      "main": [
+        [
+          {
+            "node": "Tipo de mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tipo de mensaje": {
+      "main": [
+        [
+          {
+            "node": "Texto tal cual",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "URL del medio (Meta)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Formato no soportado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "URL del medio (Meta)": {
+      "main": [
+        [
+          {
+            "node": "Descargar medio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar medio": {
+      "main": [
+        [
+          {
+            "node": "A base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A base64": {
+      "main": [
+        [
+          {
+            "node": "Guardar archivo (SQL)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Tipo de medio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tipo de medio": {
+      "main": [
+        [
+          {
+            "node": "Nombrar audio .ogg",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Analizar imagen (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Texto del documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nombrar audio .ogg": {
+      "main": [
+        [
+          {
+            "node": "Transcribir (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribir (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Texto del audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analizar imagen (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Texto de la imagen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto tal cual": {
+      "main": [
+        [
+          {
+            "node": "Guardar agent_text (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formato no soportado": {
+      "main": [
+        [
+          {
+            "node": "Guardar agent_text (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto del audio": {
+      "main": [
+        [
+          {
+            "node": "Guardar agent_text (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto de la imagen": {
+      "main": [
+        [
+          {
+            "node": "Guardar agent_text (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto del documento": {
+      "main": [
+        [
+          {
+            "node": "Guardar agent_text (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionOrder": "v1"
+  },
+  "pinData": null,
+  "staticData": null,
+  "tags": []
+}

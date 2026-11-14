@@ -1,0 +1,994 @@
+{
+  "id": "E3RJoHDGSfU3xcTm",
+  "name": "KB · 2 Procesar archivo",
+  "active": true,
+  "nodes": [
+    {
+      "id": "k1",
+      "name": "Entrada",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "run_id",
+              "type": "number"
+            },
+            {
+              "name": "action",
+              "type": "string"
+            },
+            {
+              "name": "file_id",
+              "type": "string"
+            },
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "mime_type",
+              "type": "string"
+            },
+            {
+              "name": "category",
+              "type": "string"
+            },
+            {
+              "name": "modified_time",
+              "type": "string"
+            },
+            {
+              "name": "version",
+              "type": "string"
+            },
+            {
+              "name": "old_category",
+              "type": "string"
+            },
+            {
+              "name": "old_vector_ids",
+              "type": "array"
+            },
+            {
+              "name": "pinecone_host",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "k2",
+      "name": "Según acción",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        220,
+        400
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "renameOutput": true,
+              "outputKey": "indexar",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a1",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "add",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "a2",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              }
+            },
+            {
+              "renameOutput": true,
+              "outputKey": "eliminar",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a3",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "delete",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "renameOutput": true,
+              "outputKey": "no soportado",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a4",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "unsupported",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "i1",
+      "name": "Tipo de archivo",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        460,
+        200
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "renameOutput": true,
+              "outputKey": "doc",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "t1",
+                    "leftValue": "={{ $json.mime_type }}",
+                    "rightValue": "application/vnd.google-apps.document",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "renameOutput": true,
+              "outputKey": "sheet",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "t2",
+                    "leftValue": "={{ $json.mime_type }}",
+                    "rightValue": "application/vnd.google-apps.spreadsheet",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "renameOutput": true,
+              "outputKey": "pdf",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "t3",
+                    "leftValue": "={{ $json.mime_type }}",
+                    "rightValue": "application/pdf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "i2",
+      "name": "Exportar Doc (markdown)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "position": [
+        700,
+        60
+      ],
+      "parameters": {
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.file_id }}/export?mimeType=text/markdown",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "content"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "WSHDp2ZQ4qMFpLOi",
+          "name": "Google Drive KB (cuenta de servicio n8n-kb)"
+        }
+      }
+    },
+    {
+      "id": "i3",
+      "name": "Exportar Sheet (CSV)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "position": [
+        700,
+        200
+      ],
+      "parameters": {
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.file_id }}/export?mimeType=text/csv",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "content"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "WSHDp2ZQ4qMFpLOi",
+          "name": "Google Drive KB (cuenta de servicio n8n-kb)"
+        }
+      }
+    },
+    {
+      "id": "i4",
+      "name": "Descargar PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "position": [
+        700,
+        340
+      ],
+      "parameters": {
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.file_id }}?alt=media",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "WSHDp2ZQ4qMFpLOi",
+          "name": "Google Drive KB (cuenta de servicio n8n-kb)"
+        }
+      }
+    },
+    {
+      "id": "i5",
+      "name": "Texto del PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        920,
+        340
+      ],
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {}
+      }
+    },
+    {
+      "id": "i6",
+      "name": "Contenido PDF",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1140,
+        340
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "content",
+              "type": "string",
+              "value": "={{ $json.text }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "i7",
+      "name": "Fragmentar",
+      "notes": "Why Code: estrategia de fragmentación propia que ningún nodo nativo cubre como items: FAQ = 1 fila por fragmento con id estable; Docs = 1 sección (##) por fragmento; PDF/secciones largas = ventanas de ~3200 caracteres con 400 de solapamiento.",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// Estrategia:\n//  - Sheet con columnas pregunta/respuesta (FAQ): 1 fila = 1 fragmento, id = fileId#<id de la fila>\n//  - Otros Sheets: 1 fila = 1 fragmento (\"columna: valor\")\n//  - Google Docs (markdown) y PDF: 1 sección (## Título) = 1 fragmento; si es larga, ventanas\n//    de ~3200 caracteres (~800 tokens) con 400 de solapamiento, cortando por párrafos.\n// Cada fragmento lleva \"Documento › Sección\" al inicio para que se entienda solo.\nconst f = $('Entrada').first().json;\nconst raw = String($json.content || '');\nconst MAX = 3200, OVERLAP = 400;\nconst chunks = [];\nconst title = String(f.name).replace(/\\s*·\\s*Automaverso\\s*$/i, '').trim();\n\nfunction windows(text) {\n  const paras = text.split(/\\n{2,}/).map(p => p.trim()).filter(Boolean);\n  const out = []; let cur = '';\n  for (const p of paras) {\n    if (cur && (cur.length + p.length + 2) > MAX) { out.push(cur); cur = cur.slice(-OVERLAP) + '\\n\\n' + p; }\n    else cur = cur ? cur + '\\n\\n' + p : p;\n    while (cur.length > MAX * 1.5) { out.push(cur.slice(0, MAX)); cur = cur.slice(MAX - OVERLAP); }\n  }\n  if (cur.trim()) out.push(cur);\n  return out;\n}\nfunction parseCsv(s) {\n  const rows = []; let row = [], fld = '', q = false;\n  for (let i = 0; i < s.length; i++) {\n    const c = s[i];\n    if (q) { if (c === '\"' && s[i + 1] === '\"') { fld += '\"'; i++; } else if (c === '\"') q = false; else fld += c; }\n    else if (c === '\"') q = true;\n    else if (c === ',') { row.push(fld); fld = ''; }\n    else if (c === '\\n' || c === '\\r') { if (c === '\\r' && s[i + 1] === '\\n') i++; row.push(fld); rows.push(row); row = []; fld = ''; }\n    else fld += c;\n  }\n  if (fld || row.length) { row.push(fld); rows.push(row); }\n  return rows;\n}\n\nif (f.mime_type === 'application/vnd.google-apps.spreadsheet') {\n  const rows = parseCsv(raw);\n  const head = (rows.shift() || []).map(h => h.trim().toLowerCase());\n  const col = n => head.indexOf(n);\n  const isFaq = col('pregunta') >= 0 && col('respuesta') >= 0;\n  rows.forEach((r, i) => {\n    const get = n => (col(n) >= 0 ? String(r[col(n)] || '').trim() : '');\n    if (isFaq) {\n      const p = get('pregunta'), a = get('respuesta');\n      if (!p || !a) return;\n      if (get('activo').toUpperCase() === 'FALSE') return;\n      const id = get('id') || `fila-${i + 2}`;\n      const kw = get('palabras_clave');\n      chunks.push({ id: `${f.file_id}#${id}`, section: get('categoria'), doc_type: 'faq',\n        text: `Pregunta: ${p}\\nRespuesta: ${a}` + (kw ? `\\nPalabras clave: ${kw}` : ''),\n        extra: { faq_id: id, pregunta: p, fuente: get('fuente') } });\n    } else {\n      const line = head.map((h, j) => (r[j] && String(r[j]).trim() ? `${h}: ${String(r[j]).trim()}` : '')).filter(Boolean).join('\\n');\n      if (line) chunks.push({ id: `${f.file_id}#r${String(i + 2).padStart(4, '0')}`, section: title, doc_type: 'hoja', text: `${title}\\n${line}` });\n    }\n  });\n} else {\n  const docType = f.mime_type === 'application/pdf' ? 'pdf' : 'documento';\n  const text = raw\n    .replace(/\\*\\*/g, '')\n    .replace(/\\\\([\\\\`*_{}\\[\\]()#+\\-.!:|>])/g, '$1')\n    .split('\\n')\n    .filter(l => !/^\\s*\\|?\\s*:?-{3,}/.test(l) && l.trim() !== '---')\n    .map(l => (/^\\s*\\|.*\\|\\s*$/.test(l) ? l.split('|').map(x => x.trim()).filter(Boolean).join(': ') : l))\n    .join('\\n');\n  const parts = []; let cur = { h: '', body: [] };\n  for (const l of text.split('\\n')) {\n    const m = l.match(/^#{1,3}\\s+(.*)/);\n    if (m) { if (cur.h || cur.body.join('').trim()) parts.push(cur); cur = { h: m[1].trim(), body: [] }; }\n    else cur.body.push(l);\n  }\n  parts.push(cur);\n  let n = 0;\n  for (const p of parts) {\n    const body = p.body.join('\\n').replace(/\\n{3,}/g, '\\n\\n').trim();\n    if (!body) continue;\n    const sec = p.h && p.h !== title ? p.h : 'Introducción';\n    for (const w of windows(body)) {\n      chunks.push({ id: `${f.file_id}#${String(n++).padStart(4, '0')}`, section: sec, doc_type: docType, text: `${title} › ${sec}\\n\\n${w}` });\n    }\n  }\n}\nreturn [{ json: { chunks, count: chunks.length, ids: chunks.map(c => c.id) } }];"
+      }
+    },
+    {
+      "id": "i8",
+      "name": "¿Tiene contenido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1580,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "h1",
+              "leftValue": "={{ $json.count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "i9",
+      "name": "Embeddings (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "position": [
+        1800,
+        120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'text-embedding-3-small', input: $json.chunks.map(c => c.text) }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "sevrRORNVNDEXyvj",
+          "name": "OpenAI (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "i10",
+      "name": "Armar vectores",
+      "notes": "Why Code: emparejar cada embedding con su fragmento y metadatos, y partir en lotes de 100 (límite recomendado de upsert de Pinecone). Ningún nodo nativo hace el zip por índice + lotes.",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        120
+      ],
+      "parameters": {
+        "jsCode": "const f = $('Entrada').first().json;\nconst chunks = $('Fragmentar').first().json.chunks;\nconst emb = [...$json.data].sort((a, b) => a.index - b.index);\nif (emb.length !== chunks.length) throw new Error(`Embeddings (${emb.length}) != fragmentos (${chunks.length})`);\nconst vectors = chunks.map((c, i) => {\n  const md = { file_id: f.file_id, file_name: f.name, category: f.category, doc_type: c.doc_type,\n    modified_time: f.modified_time, version: String(f.version), chunk_index: i, section: c.section, text: c.text, ...(c.extra || {}) };\n  for (const k of Object.keys(md)) if (md[k] === '' || md[k] === null || md[k] === undefined) delete md[k];\n  return { id: c.id, values: emb[i].embedding, metadata: md };\n});\nconst out = [];\nfor (let i = 0; i < vectors.length; i += 100) out.push({ json: { namespace: f.category, vectors: vectors.slice(i, i + 100) } });\nreturn out;"
+      }
+    },
+    {
+      "id": "i11",
+      "name": "Guardar en Pinecone",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "position": [
+        2240,
+        120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $('Entrada').first().json.pinecone_host }}/vectors/upsert",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Pinecone-API-Version",
+              "value": "2025-04"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ namespace: $json.namespace, vectors: $json.vectors }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "vr8grs9518nuN1KZ",
+          "name": "Pinecone API"
+        }
+      }
+    },
+    {
+      "id": "i12",
+      "name": "Registrar indexado (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        2460,
+        200
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT stale_namespace, to_jsonb(stale_ids) AS stale_ids, COALESCE(cardinality(stale_ids), 0) AS n_stale\n  FROM kb.mark_indexed($1::bigint, $2::jsonb, ARRAY(SELECT jsonb_array_elements_text($3::jsonb)), $4)",
+        "options": {
+          "queryReplacement": "={{ [ $('Entrada').first().json.run_id, JSON.stringify({ file_id: $('Entrada').first().json.file_id, name: $('Entrada').first().json.name, mime_type: $('Entrada').first().json.mime_type, category: $('Entrada').first().json.category, modified_time: $('Entrada').first().json.modified_time, version: $('Entrada').first().json.version }), JSON.stringify($('Fragmentar').first().json.ids), $('Entrada').first().json.action ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "i13",
+      "name": "¿Quedaron vectores viejos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2680,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "s1",
+              "leftValue": "={{ $json.n_stale }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "i14",
+      "name": "Borrar vectores viejos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "position": [
+        2900,
+        120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $('Entrada').first().json.pinecone_host }}/vectors/delete",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Pinecone-API-Version",
+              "value": "2025-04"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ namespace: $json.stale_namespace, ids: $json.stale_ids }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "vr8grs9518nuN1KZ",
+          "name": "Pinecone API"
+        }
+      }
+    },
+    {
+      "id": "d1",
+      "name": "¿Tiene vectores?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        460,
+        560
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "v1",
+              "leftValue": "={{ ($json.old_vector_ids || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d2",
+      "name": "Borrar vectores del archivo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "position": [
+        700,
+        500
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $('Entrada').first().json.pinecone_host }}/vectors/delete",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Pinecone-API-Version",
+              "value": "2025-04"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ namespace: $('Entrada').first().json.old_category, ids: $('Entrada').first().json.old_vector_ids }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "vr8grs9518nuN1KZ",
+          "name": "Pinecone API"
+        }
+      }
+    },
+    {
+      "id": "d3",
+      "name": "Marcar eliminado (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        920,
+        560
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT kb.mark_deleted($1::bigint, $2) AS ok, $2::text AS file_id",
+        "options": {
+          "queryReplacement": "={{ [ $('Entrada').first().json.run_id, $('Entrada').first().json.file_id ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "u1",
+      "name": "Registrar no soportado (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        460,
+        760
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT kb.mark_unsupported($1::bigint, $2::jsonb) AS ok",
+        "options": {
+          "queryReplacement": "={{ [ $json.run_id, JSON.stringify({ file_id: $json.file_id, name: $json.name, mime_type: $json.mime_type, category: $json.category, modified_time: $json.modified_time, version: $json.version }) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "n1",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -140
+      ],
+      "parameters": {
+        "width": 760,
+        "height": 220,
+        "content": "## KB · 2 Procesar archivo (1 ejecución = 1 archivo)\n- **indexar**: exporta (Doc→markdown, Sheet→CSV, PDF→texto) → fragmenta → embeddings `text-embedding-3-small` → upsert en Pinecone (namespace = categoría, ids determinísticos) → registra en `kb.files` y borra los vectores que sobran.\n- **eliminar**: borra exactamente los ids registrados del archivo.\n- **no soportado**: solo lo registra.\nSi algo falla, el error sube a KB · 1, que lo anota en `kb.sync_events` y reintenta en la siguiente pasada."
+      }
+    }
+  ],
+  "connections": {
+    "Entrada": {
+      "main": [
+        [
+          {
+            "node": "Según acción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Según acción": {
+      "main": [
+        [
+          {
+            "node": "Tipo de archivo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Tiene vectores?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar no soportado (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tipo de archivo": {
+      "main": [
+        [
+          {
+            "node": "Exportar Doc (markdown)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exportar Sheet (CSV)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Descargar PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exportar Doc (markdown)": {
+      "main": [
+        [
+          {
+            "node": "Fragmentar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exportar Sheet (CSV)": {
+      "main": [
+        [
+          {
+            "node": "Fragmentar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar PDF": {
+      "main": [
+        [
+          {
+            "node": "Texto del PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto del PDF": {
+      "main": [
+        [
+          {
+            "node": "Contenido PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contenido PDF": {
+      "main": [
+        [
+          {
+            "node": "Fragmentar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fragmentar": {
+      "main": [
+        [
+          {
+            "node": "¿Tiene contenido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Tiene contenido?": {
+      "main": [
+        [
+          {
+            "node": "Embeddings (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar indexado (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Armar vectores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar vectores": {
+      "main": [
+        [
+          {
+            "node": "Guardar en Pinecone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar en Pinecone": {
+      "main": [
+        [
+          {
+            "node": "Registrar indexado (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar indexado (SQL)": {
+      "main": [
+        [
+          {
+            "node": "¿Quedaron vectores viejos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Quedaron vectores viejos?": {
+      "main": [
+        [
+          {
+            "node": "Borrar vectores viejos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "¿Tiene vectores?": {
+      "main": [
+        [
+          {
+            "node": "Borrar vectores del archivo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marcar eliminado (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Borrar vectores del archivo": {
+      "main": [
+        [
+          {
+            "node": "Marcar eliminado (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionOrder": "v1"
+  },
+  "pinData": null,
+  "staticData": null,
+  "tags": []
+}

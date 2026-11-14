@@ -1,0 +1,759 @@
+{
+  "id": "PF6knHHAsujMCEpX",
+  "name": "KB · 1 Sincronizar Drive",
+  "active": true,
+  "nodes": [
+    {
+      "id": "t1",
+      "name": "Cada 5 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t2",
+      "name": "Reindexar todo (manual)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "s1",
+      "name": "Modo: programado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        200
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "trigger",
+              "type": "string",
+              "value": "schedule"
+            },
+            {
+              "id": "m2",
+              "name": "full",
+              "type": "boolean",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "s2",
+      "name": "Modo: reindexación completa",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        400
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m3",
+              "name": "trigger",
+              "type": "string",
+              "value": "reindex"
+            },
+            {
+              "id": "m4",
+              "name": "full",
+              "type": "boolean",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "r1",
+      "name": "Abrir ejecución (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT kb.start_run($1, $2::boolean) AS run_id, $2::boolean AS full,\n       chatbot.config('kb_root_folder_id') AS root, chatbot.config('pinecone_host') AS pinecone_host",
+        "options": {
+          "queryReplacement": "={{ [ $json.trigger, $json.full ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "r2",
+      "name": "¿Hay otra en curso?",
+      "notes": "Si start_run devuelve NULL ya hay una sincronización corriendo: esta termina sin hacer nada.",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "o1",
+              "leftValue": "={{ $json.run_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "r3",
+      "name": "Listar carpetas (Drive)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "position": [
+        880,
+        380
+      ],
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files?pageSize=200&fields=files(id,name)&q=' + encodeURIComponent(\"'\" + $json.root + \"' in parents and trashed=false and mimeType='application/vnd.google-apps.folder'\") }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "WSHDp2ZQ4qMFpLOi",
+          "name": "Google Drive KB (cuenta de servicio n8n-kb)"
+        }
+      }
+    },
+    {
+      "id": "r4",
+      "name": "Una por carpeta",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "fieldToSplitOut": "files",
+        "options": {}
+      }
+    },
+    {
+      "id": "r5",
+      "name": "Ignorar carpetas «_»",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f1",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "_",
+              "operator": {
+                "type": "string",
+                "operation": "notStartsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "r6",
+      "name": "Listar archivos (Drive)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files?pageSize=1000&fields=files(id,name,mimeType,modifiedTime,version)&q=' + encodeURIComponent(\"'\" + $json.id + \"' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'\") }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "WSHDp2ZQ4qMFpLOi",
+          "name": "Google Drive KB (cuenta de servicio n8n-kb)"
+        }
+      }
+    },
+    {
+      "id": "r7",
+      "name": "Planificar (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "position": [
+        1760,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.file_id, p.name, p.mime_type, p.category, p.modified_time, p.version::text AS version, p.action,\n       p.old_category, to_jsonb(COALESCE(p.old_vector_ids, '{}')) AS old_ids\n  FROM kb.plan_sync($1::bigint,\n       COALESCE((SELECT jsonb_agg(jsonb_build_object(\n                   'file_id', f->>'id', 'name', f->>'name', 'mime_type', f->>'mimeType',\n                   'category', c->>'category', 'modified_time', f->>'modifiedTime', 'version', f->>'version'))\n                   FROM jsonb_array_elements($2::jsonb) c\n                   CROSS JOIN LATERAL jsonb_array_elements(COALESCE(c->'files', '[]'::jsonb)) f), '[]'::jsonb),\n       $3::boolean) p",
+        "options": {
+          "queryReplacement": "={{ [ $('Abrir ejecución (SQL)').first().json.run_id, JSON.stringify($('Listar archivos (Drive)').all().map((it, i) => ({ category: $('Ignorar carpetas «_»').all()[i].json.name, files: it.json.files || [] }))), $('Abrir ejecución (SQL)').first().json.full ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "r8",
+      "name": "Solo cambios",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "alwaysOutputData": true,
+      "position": [
+        1980,
+        220
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "unchanged",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "r9",
+      "name": "Procesar archivo",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "onError": "continueRegularOutput",
+      "position": [
+        2200,
+        220
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "E3RJoHDGSfU3xcTm"
+        },
+        "mode": "each",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "run_id": "={{ $('Abrir ejecución (SQL)').first().json.run_id }}",
+            "action": "={{ $json.action || '' }}",
+            "file_id": "={{ $json.file_id }}",
+            "name": "={{ $json.name }}",
+            "mime_type": "={{ $json.mime_type }}",
+            "category": "={{ $json.category }}",
+            "modified_time": "={{ $json.modified_time }}",
+            "version": "={{ $json.version }}",
+            "old_category": "={{ $json.old_category || '' }}",
+            "old_vector_ids": "={{ $json.old_ids || [] }}",
+            "pinecone_host": "={{ $('Abrir ejecución (SQL)').first().json.pinecone_host }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "run_id",
+              "displayName": "run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number"
+            },
+            {
+              "id": "action",
+              "displayName": "action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "file_id",
+              "displayName": "file_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "mime_type",
+              "displayName": "mime_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "modified_time",
+              "displayName": "modified_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "version",
+              "displayName": "version",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "old_category",
+              "displayName": "old_category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "old_vector_ids",
+              "displayName": "old_vector_ids",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "array"
+            },
+            {
+              "id": "pinecone_host",
+              "displayName": "pinecone_host",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "r10",
+      "name": "Registrar errores (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        2420,
+        220
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT kb.log_result($1::bigint, $2::jsonb, $3, $4) AS had_error",
+        "options": {
+          "queryReplacement": "={{ [ $('Abrir ejecución (SQL)').first().json.run_id, JSON.stringify({ file_id: $('Solo cambios').item.json.file_id, name: $('Solo cambios').item.json.name, mime_type: $('Solo cambios').item.json.mime_type, category: $('Solo cambios').item.json.category, modified_time: $('Solo cambios').item.json.modified_time }), $('Solo cambios').item.json.action || '', $json.error ? (typeof $json.error === 'string' ? $json.error : ($json.error.message || JSON.stringify($json.error))) : '' ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "r11",
+      "name": "Cerrar ejecución (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        2640,
+        220
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM kb.finish_run($1::bigint, $2::int)",
+        "options": {
+          "queryReplacement": "={{ [ $('Abrir ejecución (SQL)').first().json.run_id, $('Planificar (SQL)').all().filter(i => i.json.action === 'unchanged').length ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "r12",
+      "name": "Cerrar con error (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        1980,
+        480
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM kb.fail_run($1::bigint, $2)",
+        "options": {
+          "queryReplacement": "={{ [ $('Abrir ejecución (SQL)').first().json.run_id, $json.error ? (typeof $json.error === 'string' ? $json.error : ($json.error.message || JSON.stringify($json.error))) : 'error al listar Drive o planificar' ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "n1",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -140
+      ],
+      "parameters": {
+        "width": 880,
+        "height": 260,
+        "content": "## KB · 1 Sincronizar Drive → Pinecone (independiente del bot)\n**Reconciliación cada 5 min** (no usa el trigger de Drive: ese solo sondea y no detecta borrados).\n1. Abre una ejecución en `kb.sync_runs` (si ya hay otra corriendo, sale).\n2. Lista subcarpetas (= categoría = namespace) y sus archivos; ignora lo que empieza por «_».\n3. `kb.plan_sync` compara con `kb.files` → add / update / delete / unsupported / unchanged. Si Drive devuelve vacío, **no borra nada**.\n4. KB · 2 procesa cada archivo con cambios; los errores quedan en `kb.sync_events` y se reintentan en la próxima pasada.\n5. Cierra la ejecución con totales.\n**Reindexar todo**: abre este workflow y ejecuta «Reindexar todo (manual)»."
+      }
+    }
+  ],
+  "connections": {
+    "Cada 5 minutos": {
+      "main": [
+        [
+          {
+            "node": "Modo: programado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reindexar todo (manual)": {
+      "main": [
+        [
+          {
+            "node": "Modo: reindexación completa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modo: programado": {
+      "main": [
+        [
+          {
+            "node": "Abrir ejecución (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modo: reindexación completa": {
+      "main": [
+        [
+          {
+            "node": "Abrir ejecución (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Abrir ejecución (SQL)": {
+      "main": [
+        [
+          {
+            "node": "¿Hay otra en curso?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay otra en curso?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Listar carpetas (Drive)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar carpetas (Drive)": {
+      "main": [
+        [
+          {
+            "node": "Una por carpeta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cerrar con error (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Una por carpeta": {
+      "main": [
+        [
+          {
+            "node": "Ignorar carpetas «_»",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ignorar carpetas «_»": {
+      "main": [
+        [
+          {
+            "node": "Listar archivos (Drive)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar archivos (Drive)": {
+      "main": [
+        [
+          {
+            "node": "Planificar (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cerrar con error (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planificar (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Solo cambios",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cerrar con error (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Solo cambios": {
+      "main": [
+        [
+          {
+            "node": "Procesar archivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar archivo": {
+      "main": [
+        [
+          {
+            "node": "Registrar errores (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar errores (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Cerrar ejecución (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "timezone": "America/Bogota",
+    "executionOrder": "v1"
+  },
+  "pinData": null,
+  "staticData": {
+    "node:Cada 5 minutos": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": []
+}

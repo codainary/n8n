@@ -1,0 +1,184 @@
+{
+  "id": "L8pf3ZmUvZAk2yO0",
+  "name": "WA · 4 Mantenimiento",
+  "active": true,
+  "nodes": [
+    {
+      "id": "k1",
+      "name": "Cada 2 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "k2",
+      "name": "Cerrar ventanas y agotados (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH closed AS (SELECT chatbot.close_expired_conversations() AS n),\nexhausted AS (\n  UPDATE chatbot.messages\n     SET processing_state = 'failed', processed_at = now(),\n         error = COALESCE(error, '{\"reason\":\"max_attempts\"}'::jsonb)\n   WHERE direction = 'in' AND processing_state = 'processing'\n     AND processing_attempts >= 3 AND processing_started_at < now() - interval '5 minutes'\n  RETURNING 1)\nSELECT (SELECT n FROM closed) AS conversations_closed, (SELECT count(*)::int FROM exhausted) AS messages_failed",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "k3",
+      "name": "Números atascados (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT wa_id, pending FROM chatbot.stalled_wa_ids(interval '1 minute')",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "k4",
+      "name": "Reprocesar conversación",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        720,
+        300
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "WeuOkYYJBMirw5gp"
+        },
+        "mode": "each",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "wa_id": "={{ $json.wa_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "n1",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        40
+      ],
+      "parameters": {
+        "width": 760,
+        "height": 200,
+        "content": "## WA · 4 Mantenimiento (red de seguridad)\n- Cierra conversaciones con la ventana de 24 h vencida (y las abiertas por plantilla sin respuesta).\n- Marca `failed` las ráfagas que agotaron 3 intentos.\n- Relanza WA · 2 para números con pendientes > 1 min o ráfagas atascadas > 5 min (p. ej. n8n se reinició a mitad).\nNada depende de memoria en RAM: todo el estado está en `chatbot.*`."
+      }
+    }
+  ],
+  "connections": {
+    "Cada 2 minutos": {
+      "main": [
+        [
+          {
+            "node": "Cerrar ventanas y agotados (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cerrar ventanas y agotados (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Números atascados (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Números atascados (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Reprocesar conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "executionOrder": "v1"
+  },
+  "pinData": null,
+  "staticData": {
+    "node:Cada 2 minutos": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": []
+}
