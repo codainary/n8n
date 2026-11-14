@@ -11,6 +11,8 @@
       "Bash(docker inspect:*)",
       "Bash(node scripts/n8n-sync.mjs list)",
       "Bash(node scripts/n8n-sync.mjs pull)",
+      "Bash(node scripts/n8n-sync.mjs list --remote)",
+      "Bash(node scripts/n8n-sync.mjs pull --remote)",
       "mcp__n8n-mcp__search_nodes",
       "mcp__n8n-mcp__get_node",
       "mcp__n8n-mcp__validate_node",

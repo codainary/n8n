@@ -1,6 +1,16 @@
 # n8n — entorno de trabajo
 
-Instancia self-hosted de **n8n 2.47.7** en Docker, modo **queue**. Desde aquí se diseñan, validan, despliegan y versionan workflows.
+Desde aquí se diseñan, validan, despliegan y versionan workflows en dos instancias:
+
+| Instancia | URL | Uso | MCP |
+|---|---|---|---|
+| **Servidor (principal)** | https://n8n.automaverso.com | Trabajo diario / producción | `n8n-mcp` |
+| Local | http://localhost:5678 | Pruebas, upgrades (normalmente detenida) | `n8n-mcp-local` |
+
+- El servidor está detrás de **Cloudflare Access**: toda petición necesita las cabeceras `CF-Access-Client-Id` / `CF-Access-Client-Secret` (service token en `.env`: `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`). Sin ellas responde 302 al login de Cloudflare. `n8n-mcp` las envía vía `N8N_CF_CLIENT_ID` / `N8N_CF_CLIENT_SECRET`.
+- Por defecto se trabaja contra el **servidor**. Usar `n8n-mcp-local` solo si el usuario pide la instancia local.
+
+La instancia local es self-hosted **n8n 2.47.7** en Docker, modo **queue** (lo que sigue describe su docker-compose).
 
 ## Arquitectura (docker-compose.yml)
 
@@ -18,7 +28,7 @@ Instancia self-hosted de **n8n 2.47.7** en Docker, modo **queue**. Desde aquí s
 
 ## Herramientas disponibles
 
-- **MCP `n8n-mcp`** (alcance local, la API key vive en `~/.claude.json`, no en el repo): documentación de nodos, validación y CRUD de workflows contra la instancia.
+- **MCP `n8n-mcp`** → servidor, **`n8n-mcp-local`** → local (alcance local; keys y token de Cloudflare viven en `~/.claude.json`, no en el repo): documentación de nodos, validación y CRUD de workflows.
 - **MCP nativo de n8n** (`n8n-native`, si está configurado): ejecutar/buscar workflows expuestos desde Settings > Instance-level MCP.
 - **Plugin `n8n-mcp-skills`**: skills de patrones, expresiones, nodos Code, validación, agentes IA, sub-workflows, manejo de errores.
 - **`scripts/n8n-sync.mjs`**: sincroniza workflows entre n8n y `workflows/`.
@@ -38,9 +48,10 @@ Instancia self-hosted de **n8n 2.47.7** en Docker, modo **queue**. Desde aquí s
 docker compose up -d                 # levantar
 docker compose ps                    # estado
 docker compose logs -f n8n           # logs del main (o n8n-worker-1, n8n-worker-1-runner…)
-node scripts/n8n-sync.mjs list       # workflows en n8n
-node scripts/n8n-sync.mjs pull       # n8n -> workflows/*.json
-node scripts/n8n-sync.mjs push [f]   # workflows/*.json -> n8n (crea o actualiza por id)
+node scripts/n8n-sync.mjs list --remote       # workflows en el servidor
+node scripts/n8n-sync.mjs pull --remote       # servidor -> workflows/*.json
+node scripts/n8n-sync.mjs push [f] --remote   # workflows/*.json -> servidor (crea o actualiza por id)
+# sin --remote: mismas operaciones contra la instancia local
 ```
 
 Backup de la base antes de cualquier upgrade:

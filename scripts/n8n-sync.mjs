@@ -5,8 +5,11 @@
 //   node scripts/n8n-sync.mjs pull            # n8n  -> workflows/*.json
 //   node scripts/n8n-sync.mjs push [archivo]  # workflows/*.json -> n8n (crea o actualiza por id)
 //   node scripts/n8n-sync.mjs list            # lista workflows en n8n
+//   ... --remote                              # contra el servidor (n8n.automaverso.com)
 //
-// Lee N8N_API_URL y N8N_API_KEY de .env (o del entorno).
+// Local:  N8N_API_URL, N8N_API_KEY
+// Remoto: N8N_REMOTE_API_URL, N8N_REMOTE_API_KEY, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET
+// Todo se lee de .env (o del entorno).
 // Las credenciales NO viajan: los workflows solo guardan referencias a ellas.
 // ==========================================
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
@@ -29,17 +32,26 @@ function loadEnv() {
 }
 
 const env = loadEnv();
-const BASE = (env.N8N_API_URL || 'http://localhost:5678').replace(/\/+$/, '');
-const KEY = env.N8N_API_KEY;
-if (!KEY) {
-  console.error('Falta N8N_API_KEY en .env');
+const argv = process.argv.slice(2);
+const REMOTE = argv.includes('--remote');
+const BASE = (REMOTE ? env.N8N_REMOTE_API_URL : env.N8N_API_URL || 'http://localhost:5678').replace(/\/+$/, '');
+const KEY = REMOTE ? env.N8N_REMOTE_API_KEY : env.N8N_API_KEY;
+if (!BASE || !KEY) {
+  console.error(REMOTE ? 'Faltan N8N_REMOTE_API_URL / N8N_REMOTE_API_KEY en .env' : 'Falta N8N_API_KEY en .env');
   process.exit(1);
 }
+// Cloudflare Access (service token) para la instancia remota
+const CF_HEADERS =
+  REMOTE && env.CF_ACCESS_CLIENT_ID
+    ? { 'CF-Access-Client-Id': env.CF_ACCESS_CLIENT_ID, 'CF-Access-Client-Secret': env.CF_ACCESS_CLIENT_SECRET }
+    : {};
+console.error(`→ ${REMOTE ? 'REMOTO' : 'local'}: ${BASE}`);
 
 async function api(method, path, body) {
   const res = await fetch(`${BASE}/api/v1${path}`, {
     method,
-    headers: { 'X-N8N-API-KEY': KEY, 'Content-Type': 'application/json', Accept: 'application/json' },
+    redirect: 'manual',
+    headers: { ...CF_HEADERS, 'X-N8N-API-KEY': KEY, 'Content-Type': 'application/json', Accept: 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
@@ -122,10 +134,10 @@ async function list() {
   for (const w of await listAll()) console.log(`${w.active ? '●' : '○'} ${w.id}  ${w.name}`);
 }
 
-const [cmd, arg] = process.argv.slice(2);
+const [cmd, arg] = argv.filter((a) => a !== '--remote');
 const actions = { pull, push: () => push(arg), list };
 if (!actions[cmd]) {
-  console.log('Uso: node scripts/n8n-sync.mjs <pull|push [archivo]|list>');
+  console.log('Uso: node scripts/n8n-sync.mjs <pull|push [archivo]|list> [--remote]');
   process.exit(1);
 }
 actions[cmd]().catch((e) => {
