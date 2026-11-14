@@ -1,0 +1,298 @@
+{
+  "id": "bS9CE7PlHEgDBMYg",
+  "name": "WA · 5 Enviar documento",
+  "active": true,
+  "nodes": [
+    {
+      "id": "d1",
+      "name": "Entrada",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "wa_id",
+              "type": "string"
+            },
+            {
+              "name": "document_url",
+              "type": "string"
+            },
+            {
+              "name": "file_name",
+              "type": "string"
+            },
+            {
+              "name": "caption",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d2",
+      "name": "Estado de la ventana (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT $1::text AS wa_id, chatbot.config('wa_phone_number_id') AS phone_number_id,\n       COALESCE((SELECT can_send_free_form FROM chatbot.window_state($1)), false) AS can_send_free_form",
+        "options": {
+          "queryReplacement": "={{ [ $json.wa_id ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "d3",
+      "name": "¿Ventana de 24 h abierta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "w1",
+              "leftValue": "={{ $json.can_send_free_form }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d4",
+      "name": "Enviar documento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        680,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $json.phone_number_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $json.wa_id, type: 'document', document: { link: $('Entrada').first().json.document_url, filename: $('Entrada').first().json.file_name || 'documento.pdf', caption: $('Entrada').first().json.caption || undefined } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "d5",
+      "name": "Registrar documento saliente (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        900,
+        200
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT r.*, 'document_sent' AS result FROM chatbot.register_outbound(jsonb_build_object(\n  'wamid', $1, 'wa_id', $2, 'type', 'document', 'caption', NULLIF($3, ''),\n  'agent_text', '[Documento enviado: ' || $4 || ']', 'raw', jsonb_build_object('response', $5::jsonb, 'link', $6))) r",
+        "options": {
+          "queryReplacement": "={{ [ $json.messages[0].id, $('Estado de la ventana (SQL)').first().json.wa_id, $('Entrada').first().json.caption || '', $('Entrada').first().json.file_name || 'documento', JSON.stringify($json), $('Entrada').first().json.document_url ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "d6",
+      "name": "Enviar plantilla para reabrir",
+      "notes": "Fuera de la ventana de 24 h Meta solo permite plantillas aprobadas. hello_world es la plantilla de prueba; en producción usar una plantilla UTILITY propia (p. ej. 'documento_disponible').",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        680,
+        420
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $json.phone_number_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.wa_id, type: 'template', template: { name: 'hello_world', language: { code: 'en_US' } } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "d7",
+      "name": "Registrar plantilla (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        900,
+        420
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT r.*, 'template_sent' AS result,\n       'Ventana de 24 h cerrada: se envió una plantilla para reabrir la conversación. Reintentar el documento cuando el usuario responda.' AS note\n  FROM chatbot.register_outbound(jsonb_build_object(\n  'wamid', $1, 'wa_id', $2, 'type', 'template', 'text', 'hello_world', 'is_template', true, 'raw', $3::jsonb)) r",
+        "options": {
+          "queryReplacement": "={{ [ $json.messages[0].id, $('Estado de la ventana (SQL)').first().json.wa_id, JSON.stringify($json) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "n1",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -20
+      ],
+      "parameters": {
+        "width": 700,
+        "height": 220,
+        "content": "## WA · 5 Enviar documento (sub-workflow reutilizable)\nEntradas: `wa_id`, `document_url` (enlace público HTTPS al PDF), `file_name`, `caption`.\n- Ventana de 24 h **abierta** → envía el documento y lo registra en `chatbot.messages` (direction out, type document).\n- Ventana **cerrada** → Meta no permite mensajes libres: envía una **plantilla** (abre conversación business-initiated, categoría de pago) y la registra con `opened_by = business_template`.\nPensado para que el agente lo use como herramienta en fases siguientes."
+      }
+    }
+  ],
+  "connections": {
+    "Entrada": {
+      "main": [
+        [
+          {
+            "node": "Estado de la ventana (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Estado de la ventana (SQL)": {
+      "main": [
+        [
+          {
+            "node": "¿Ventana de 24 h abierta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Ventana de 24 h abierta?": {
+      "main": [
+        [
+          {
+            "node": "Enviar documento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar plantilla para reabrir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar documento": {
+      "main": [
+        [
+          {
+            "node": "Registrar documento saliente (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar plantilla para reabrir": {
+      "main": [
+        [
+          {
+            "node": "Registrar plantilla (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionOrder": "v1"
+  },
+  "pinData": null,
+  "staticData": null,
+  "tags": []
+}

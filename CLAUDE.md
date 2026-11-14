@@ -10,6 +10,18 @@ Desde aquí se diseñan, validan, despliegan y versionan workflows en dos instan
 - El servidor está detrás de **Cloudflare Access**: toda petición necesita las cabeceras `CF-Access-Client-Id` / `CF-Access-Client-Secret` (service token en `.env`: `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`). Sin ellas responde 302 al login de Cloudflare. `n8n-mcp` las envía vía `N8N_CF_CLIENT_ID` / `N8N_CF_CLIENT_SECRET`.
 - Por defecto se trabaja contra el **servidor**. Usar `n8n-mcp-local` solo si el usuario pide la instancia local.
 
+## Chatbot de WhatsApp (en el servidor)
+
+Documentación completa: **`docs/chatbot-whatsapp.md`** (arquitectura, esquema, workflows, seguridad, pruebas).
+
+- Workflows: `WA · 1…5` (ingesta, procesamiento, enriquecimiento, mantenimiento, envío de documentos), `KB · 1…2` (Drive → Pinecone), `TOOL · …` (herramientas del agente).
+- Estado y lógica crítica en el Postgres del VPS, esquemas `chatbot` y `kb` (SQL versionado en `sql/`). Ese Postgres no tiene puertos públicos: aplicar/consultar SQL con `node scripts/apply-sql-remote.mjs <archivo.sql> [--raw]`.
+- Secretos del bot (App Secret, verify token, etc.) en `chatbot.app_config`, nunca en workflows ni en git.
+- **Convención de herramientas**: workflow `TOOL · <verbo> <objeto>` con entradas tipadas que devuelve `{ response }`, conectado al agente de `WA · 2` con «Call n8n Sub-Workflow Tool». El system prompt está en `scripts/phase2-agent.mjs`.
+- Base de conocimiento: carpeta de Drive «Automaverso - Base de conocimiento del bot»; subcarpeta = namespace de Pinecone (`automaverso-kb`); lo que empieza por `_` se ignora.
+- En n8n 2.x: un sub-workflow debe estar **publicado** antes de referenciarlo; para borrar un workflow, despublicarlo primero.
+- Pruebas end-to-end sin celular: enviar webhooks firmados con HMAC (App Secret) a `/webhook/wa` desde números `000…` y leer las ejecuciones; limpiar los datos de prueba después.
+
 La instancia local es self-hosted **n8n 2.47.7** en Docker, modo **queue** (lo que sigue describe su docker-compose).
 
 ## Arquitectura (docker-compose.yml)
