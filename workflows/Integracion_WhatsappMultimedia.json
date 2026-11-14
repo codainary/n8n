@@ -1,22 +1,32 @@
 {
+  "id": "T6BTXWks0DEQyadF",
   "name": "Integracion_WhatsappMultimedia",
+  "active": false,
   "nodes": [
     {
-      "parameters": {
-        "promptType": "define",
-        "text": "=## PERFIL\nEres Waly, asesor de LibrosMedellin. Tu estado actual es: {{ $node[\"Postgres_Lectura\"].json[\"estado_actual\"] }}\n\n## REGLAS DE ORO (PRIORIDAD)\n1. Si el usuario es vago (ej. dice \"si\", \"hola\", \"tengo una pregunta\"), DEBES forzar la intención preguntando: \"¿Deseas consultar el inventario de libros o tienes alguna duda sobre horarios y pagos?\".\n2. Si pregunta por un libro, autor o producto, usa la Tool `LibrosInventario` de inmediato.\n\n## FLUJO DE ESTADOS\n- **Si estado es INICIO o null:** Da la bienvenida, muestra el menú de 5 opciones y finaliza con: ESTADO_CONTROL: [MENU_ENTREGADO].\n- **Si estado es MENU_ENTREGADO:** No saludes de nuevo. Si el usuario no es específico, pregunta: \"¿Te gustaría buscar un libro (Opción 1) o consultar nuestras preguntas frecuentes?\".\n- **Si detectas una consulta de producto:** Usa la Tool y finaliza con: ESTADO_CONTROL: [BUSCANDO_PRODUCTO].\n\n## FORMATO DE SALIDA (ESTRICTO)\nTu respuesta para el cliente.\nESTADO_CONTROL: [NOMBRE_DEL_ESTADO]",
-        "options": {}
-      },
+      "id": "919cfd27-f090-430b-91cf-7e83f89a24d9",
+      "name": "AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.8,
       "position": [
         640,
         688
       ],
-      "id": "919cfd27-f090-430b-91cf-7e83f89a24d9",
-      "name": "AI Agent"
+      "parameters": {
+        "promptType": "define",
+        "text": "=## PERFIL\nEres Waly, asesor de LibrosMedellin. Tu estado actual es: {{ $node[\"Postgres_Lectura\"].json[\"estado_actual\"] }}\n\n## REGLAS DE ORO (PRIORIDAD)\n1. Si el usuario es vago (ej. dice \"si\", \"hola\", \"tengo una pregunta\"), DEBES forzar la intención preguntando: \"¿Deseas consultar el inventario de libros o tienes alguna duda sobre horarios y pagos?\".\n2. Si pregunta por un libro, autor o producto, usa la Tool `LibrosInventario` de inmediato.\n\n## FLUJO DE ESTADOS\n- **Si estado es INICIO o null:** Da la bienvenida, muestra el menú de 5 opciones y finaliza con: ESTADO_CONTROL: [MENU_ENTREGADO].\n- **Si estado es MENU_ENTREGADO:** No saludes de nuevo. Si el usuario no es específico, pregunta: \"¿Te gustaría buscar un libro (Opción 1) o consultar nuestras preguntas frecuentes?\".\n- **Si detectas una consulta de producto:** Usa la Tool y finaliza con: ESTADO_CONTROL: [BUSCANDO_PRODUCTO].\n\n## FORMATO DE SALIDA (ESTRICTO)\nTu respuesta para el cliente.\nESTADO_CONTROL: [NOMBRE_DEL_ESTADO]",
+        "options": {}
+      }
     },
     {
+      "id": "8ed387cb-b0b9-41f6-898e-c2e13a820cc6",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -1024,
+        672
+      ],
       "parameters": {
         "rules": {
           "values": [
@@ -98,32 +108,24 @@
           ]
         },
         "options": {}
-      },
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3.2,
-      "position": [
-        -1024,
-        672
-      ],
-      "id": "8ed387cb-b0b9-41f6-898e-c2e13a820cc6",
-      "name": "Switch"
+      }
     },
     {
-      "parameters": {
-        "updates": [
-          "messages"
-        ],
-        "options": {}
-      },
+      "id": "c15eca2c-4160-4f79-a67c-83856ce309b5",
+      "name": "WhatsApp Trigger",
+      "webhookId": "ddf3e91c-8bed-496e-9231-d1a99c2398ba",
       "type": "n8n-nodes-base.whatsAppTrigger",
       "typeVersion": 1,
       "position": [
         -1312,
         688
       ],
-      "id": "c15eca2c-4160-4f79-a67c-83856ce309b5",
-      "name": "WhatsApp Trigger",
-      "webhookId": "ddf3e91c-8bed-496e-9231-d1a99c2398ba",
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
       "credentials": {
         "whatsAppTriggerApi": {
           "id": "iuDYaHlfAfCxozvj",
@@ -132,6 +134,14 @@
       }
     },
     {
+      "id": "cf87112b-3e86-4b42-b9eb-e1ac2e120885",
+      "name": "If",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1696,
+        688
+      ],
       "parameters": {
         "conditions": {
           "options": {
@@ -155,45 +165,37 @@
           "combinator": "and"
         },
         "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1696,
-        688
-      ],
-      "id": "cf87112b-3e86-4b42-b9eb-e1ac2e120885",
-      "name": "If"
+      }
     },
     {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "item.binary.data.mimeType = \"audio/mpeg\";\nreturn item;"
-      },
+      "id": "00e705b5-1ca7-4e9c-a6e5-a36669dce976",
+      "name": "Code",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         2160,
         512
       ],
-      "id": "00e705b5-1ca7-4e9c-a6e5-a36669dce976",
-      "name": "Code"
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "item.binary.data.mimeType = \"audio/mpeg\";\nreturn item;"
+      }
     },
     {
-      "parameters": {
-        "resource": "media",
-        "operation": "mediaUrlGet",
-        "mediaGetId": "={{ $('WhatsApp Trigger').item.json.messages[0].image.id }}"
-      },
+      "id": "d9f7010f-2a65-4220-baf2-18a6abe53c29",
+      "name": "ObtenerImagenURL",
+      "webhookId": "aba04179-9fa3-40b0-bc1a-581f9c6352dc",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1,
       "position": [
         -208,
         960
       ],
-      "id": "d9f7010f-2a65-4220-baf2-18a6abe53c29",
-      "name": "ObtenerImagenURL",
-      "webhookId": "aba04179-9fa3-40b0-bc1a-581f9c6352dc",
+      "parameters": {
+        "resource": "media",
+        "operation": "mediaUrlGet",
+        "mediaGetId": "={{ $('WhatsApp Trigger').item.json.messages[0].image.id }}"
+      },
       "credentials": {
         "whatsAppApi": {
           "id": "9ChATXdpaOv5U9lE",
@@ -202,6 +204,14 @@
       }
     },
     {
+      "id": "49015e7b-8384-4b02-9202-857cf6510dee",
+      "name": "AnalizarImagen",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        128,
+        960
+      ],
       "parameters": {
         "resource": "image",
         "operation": "analyze",
@@ -215,14 +225,6 @@
         "inputType": "base64",
         "options": {}
       },
-      "type": "@n8n/n8n-nodes-langchain.openAi",
-      "typeVersion": 1.8,
-      "position": [
-        128,
-        960
-      ],
-      "id": "49015e7b-8384-4b02-9202-857cf6510dee",
-      "name": "AnalizarImagen",
       "credentials": {
         "openAiApi": {
           "id": "h7yqx3MQ9uGULO2I",
@@ -231,6 +233,15 @@
       }
     },
     {
+      "id": "623491b9-3010-4637-bf36-32edcb8ba04a",
+      "name": "RespuestaAudio",
+      "webhookId": "7534f284-6bac-4caa-b6d5-b6e5ebdd1ebd",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        2368,
+        512
+      ],
       "parameters": {
         "operation": "send",
         "phoneNumberId": "877022628830039",
@@ -239,15 +250,6 @@
         "mediaPath": "useMedian8n",
         "additionalFields": {}
       },
-      "type": "n8n-nodes-base.whatsApp",
-      "typeVersion": 1,
-      "position": [
-        2368,
-        512
-      ],
-      "id": "623491b9-3010-4637-bf36-32edcb8ba04a",
-      "name": "RespuestaAudio",
-      "webhookId": "7534f284-6bac-4caa-b6d5-b6e5ebdd1ebd",
       "credentials": {
         "whatsAppApi": {
           "id": "9ChATXdpaOv5U9lE",
@@ -256,6 +258,15 @@
       }
     },
     {
+      "id": "edef6547-8c4f-4601-a895-fca3622972f6",
+      "name": "RespuestaTexto",
+      "webhookId": "a8e8c137-928b-4229-85a2-e341f2c9a720",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1936,
+        704
+      ],
       "parameters": {
         "operation": "send",
         "phoneNumberId": "877022628830039",
@@ -263,15 +274,6 @@
         "textBody": "={{ $('Code in JavaScript').item.json.mensaje_final }}",
         "additionalFields": {}
       },
-      "type": "n8n-nodes-base.whatsApp",
-      "typeVersion": 1,
-      "position": [
-        1936,
-        704
-      ],
-      "id": "edef6547-8c4f-4601-a895-fca3622972f6",
-      "name": "RespuestaTexto",
-      "webhookId": "a8e8c137-928b-4229-85a2-e341f2c9a720",
       "credentials": {
         "whatsAppApi": {
           "id": "9ChATXdpaOv5U9lE",
@@ -280,20 +282,20 @@
       }
     },
     {
-      "parameters": {
-        "url": "={{ $json.url }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "options": {}
-      },
+      "id": "109ee75b-bbcd-4ee6-b5c7-990ca8f84422",
+      "name": "DescargaImagen",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         -48,
         960
       ],
-      "id": "109ee75b-bbcd-4ee6-b5c7-990ca8f84422",
-      "name": "DescargaImagen",
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
       "credentials": {
         "httpHeaderAuth": {
           "id": "zCue6qwSpFSKEHj0",
@@ -302,6 +304,14 @@
       }
     },
     {
+      "id": "4f3e201d-223b-4946-afe5-3e511a55f078",
+      "name": "PromptImagen",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -368,
+        960
+      ],
       "parameters": {
         "assignments": {
           "assignments": [
@@ -314,30 +324,22 @@
           ]
         },
         "options": {}
-      },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        -368,
-        960
-      ],
-      "id": "4f3e201d-223b-4946-afe5-3e511a55f078",
-      "name": "PromptImagen"
+      }
     },
     {
-      "parameters": {
-        "resource": "audio",
-        "input": "={{ $('AI Agent').item.json.output }}",
-        "options": {}
-      },
+      "id": "a25df808-bf74-4faf-9e9f-99ee3b062e8a",
+      "name": "GenerarAudio",
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
       "position": [
         1936,
         512
       ],
-      "id": "a25df808-bf74-4faf-9e9f-99ee3b062e8a",
-      "name": "GenerarAudio",
+      "parameters": {
+        "resource": "audio",
+        "input": "={{ $('AI Agent').item.json.output }}",
+        "options": {}
+      },
       "credentials": {
         "openAiApi": {
           "id": "h7yqx3MQ9uGULO2I",
@@ -346,19 +348,19 @@
       }
     },
     {
-      "parameters": {
-        "resource": "audio",
-        "operation": "transcribe",
-        "options": {}
-      },
+      "id": "2af8fdca-f7b6-47d5-a5c5-1487bca946aa",
+      "name": "Transcribir Audio",
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
       "position": [
         -32,
         432
       ],
-      "id": "2af8fdca-f7b6-47d5-a5c5-1487bca946aa",
-      "name": "Transcribir Audio",
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      },
       "credentials": {
         "openAiApi": {
           "id": "h7yqx3MQ9uGULO2I",
@@ -367,20 +369,20 @@
       }
     },
     {
-      "parameters": {
-        "url": "={{ $json.url }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "options": {}
-      },
+      "id": "78cf957d-2998-4e59-869d-27dc27acb39a",
+      "name": "Descarga Audio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         -208,
         432
       ],
-      "id": "78cf957d-2998-4e59-869d-27dc27acb39a",
-      "name": "Descarga Audio",
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
       "credentials": {
         "httpHeaderAuth": {
           "id": "zCue6qwSpFSKEHj0",
@@ -389,20 +391,20 @@
       }
     },
     {
-      "parameters": {
-        "resource": "media",
-        "operation": "mediaUrlGet",
-        "mediaGetId": "={{ $('WhatsApp Trigger').item.json.messages[0].audio.id }}"
-      },
+      "id": "8eb38e95-c0ed-48f2-9ebf-eb2fca559458",
+      "name": "Obtener Audio",
+      "webhookId": "cb722338-b693-43b8-bb90-dda37b971080",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1,
       "position": [
         -368,
         432
       ],
-      "id": "8eb38e95-c0ed-48f2-9ebf-eb2fca559458",
-      "name": "Obtener Audio",
-      "webhookId": "cb722338-b693-43b8-bb90-dda37b971080",
+      "parameters": {
+        "resource": "media",
+        "operation": "mediaUrlGet",
+        "mediaGetId": "={{ $('WhatsApp Trigger').item.json.messages[0].audio.id }}"
+      },
       "credentials": {
         "whatsAppApi": {
           "id": "9ChATXdpaOv5U9lE",
@@ -411,6 +413,14 @@
       }
     },
     {
+      "id": "2bbdd36b-557c-4ab1-ad0d-c032788f12d6",
+      "name": "Prompt Audio",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        128,
+        432
+      ],
       "parameters": {
         "assignments": {
           "assignments": [
@@ -423,17 +433,17 @@
           ]
         },
         "options": {}
-      },
+      }
+    },
+    {
+      "id": "662fb308-85f1-49d9-b7bb-6a469a95ad75",
+      "name": "Prompt Texto",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        128,
-        432
+        -128,
+        688
       ],
-      "id": "2bbdd36b-557c-4ab1-ad0d-c032788f12d6",
-      "name": "Prompt Audio"
-    },
-    {
       "parameters": {
         "assignments": {
           "assignments": [
@@ -446,65 +456,65 @@
           ]
         },
         "options": {}
-      },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        -128,
-        688
-      ],
-      "id": "662fb308-85f1-49d9-b7bb-6a469a95ad75",
-      "name": "Prompt Texto"
+      }
     },
     {
-      "parameters": {
-        "content": "### Procesar Texto",
-        "height": 220,
-        "width": 764,
-        "color": 2
-      },
+      "id": "54a1be8a-128f-4aa3-8cb3-5acd921ce2dc",
+      "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -656,
         640
       ],
-      "id": "54a1be8a-128f-4aa3-8cb3-5acd921ce2dc",
-      "name": "Sticky Note"
-    },
-    {
       "parameters": {
-        "content": "### Procesar Audio",
-        "height": 252,
+        "content": "### Procesar Texto",
+        "height": 220,
         "width": 764,
         "color": 2
-      },
+      }
+    },
+    {
+      "id": "67502f9b-0314-4373-9817-8a61764ecc03",
+      "name": "Sticky Note3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -656,
         368
       ],
-      "id": "67502f9b-0314-4373-9817-8a61764ecc03",
-      "name": "Sticky Note3"
-    },
-    {
       "parameters": {
-        "content": "### Procesar Imagen",
+        "content": "### Procesar Audio",
         "height": 252,
         "width": 764,
         "color": 2
-      },
+      }
+    },
+    {
+      "id": "bb03a7eb-398d-441b-b79a-7724ed432a74",
+      "name": "Sticky Note4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -656,
         896
       ],
-      "id": "bb03a7eb-398d-441b-b79a-7724ed432a74",
-      "name": "Sticky Note4"
+      "parameters": {
+        "content": "### Procesar Imagen",
+        "height": 252,
+        "width": 764,
+        "color": 2
+      }
     },
     {
+      "id": "6541f401-0063-440b-9a83-a9b106117fd5",
+      "name": "Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        640,
+        928
+      ],
       "parameters": {
         "model": {
           "__rl": true,
@@ -514,14 +524,6 @@
         },
         "options": {}
       },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.2,
-      "position": [
-        640,
-        928
-      ],
-      "id": "6541f401-0063-440b-9a83-a9b106117fd5",
-      "name": "Model",
       "credentials": {
         "openAiApi": {
           "id": "HFYYCNOlxVaJreXW",
@@ -530,6 +532,14 @@
       }
     },
     {
+      "id": "4fc87340-c3e9-4aaf-a7cb-815864efa955",
+      "name": "FAQs",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1120,
+        1216
+      ],
       "parameters": {
         "documentId": {
           "__rl": true,
@@ -547,14 +557,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheetsTool",
-      "typeVersion": 4.7,
-      "position": [
-        1120,
-        1216
-      ],
-      "id": "4fc87340-c3e9-4aaf-a7cb-815864efa955",
-      "name": "FAQs",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "m1OmWrgHB6XHlqPS",
@@ -563,6 +565,15 @@
       }
     },
     {
+      "id": "c83fda82-dd4f-42f6-8b6b-f3c1dc338637",
+      "name": "Postgres_Lectura",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "alwaysOutputData": true,
+      "position": [
+        -560,
+        688
+      ],
       "parameters": {
         "operation": "select",
         "schema": {
@@ -578,15 +589,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        -560,
-        688
-      ],
-      "id": "c83fda82-dd4f-42f6-8b6b-f3c1dc338637",
-      "name": "Postgres_Lectura",
-      "alwaysOutputData": true,
       "credentials": {
         "postgres": {
           "id": "wBtV5OI1ndzqQYGv",
@@ -595,6 +597,14 @@
       }
     },
     {
+      "id": "c056c91b-52ce-42c6-89ef-a19f1ab798f6",
+      "name": "LibrosInventario",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1280,
+        1216
+      ],
       "parameters": {
         "documentId": {
           "__rl": true,
@@ -612,14 +622,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheetsTool",
-      "typeVersion": 4.7,
-      "position": [
-        1280,
-        1216
-      ],
-      "id": "c056c91b-52ce-42c6-89ef-a19f1ab798f6",
-      "name": "LibrosInventario",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "m1OmWrgHB6XHlqPS",
@@ -628,32 +630,32 @@
       }
     },
     {
-      "parameters": {
-        "jsCode": "// Capturamos la salida del Agente\nconst rawOutput = items[0].json.output;\n\n// 1. Extraer el estado (ej: BUSCANDO_PRODUCTO)\nconst estadoMatch = rawOutput.match(/ESTADO_CONTROL:\\s*\\[?(\\w+)\\]?/);\nconst nuevoEstado = estadoMatch ? estadoMatch[1] : 'INICIO';\n\n// 2. Limpiar el texto para WhatsApp (quitamos la etiqueta técnica)\nconst textoLimpio = rawOutput.replace(/ESTADO_CONTROL:\\s*\\[?\\w+\\]?/, '').trim();\n\n// 3. Preparar el objeto JSON para la base de datos (para que no de error JSONB)\n// Aquí puedes extraer datos si quieres, por ahora mandamos un objeto vacío válido\nconst datosJSON = {}; \n\nreturn {\n  mensaje_final: textoLimpio,\n  estado_db: nuevoEstado,\n  datos_db: datosJSON, // Esto es un objeto, Postgres lo aceptará\n  wa_id: $node[\"WhatsApp Trigger\"].json.contacts[0].wa_id\n};"
-      },
+      "id": "daf64550-8f36-4548-af00-29028e033e49",
+      "name": "Code in JavaScript",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1072,
         688
       ],
-      "id": "daf64550-8f36-4548-af00-29028e033e49",
-      "name": "Code in JavaScript"
+      "parameters": {
+        "jsCode": "// Capturamos la salida del Agente\nconst rawOutput = items[0].json.output;\n\n// 1. Extraer el estado (ej: BUSCANDO_PRODUCTO)\nconst estadoMatch = rawOutput.match(/ESTADO_CONTROL:\\s*\\[?(\\w+)\\]?/);\nconst nuevoEstado = estadoMatch ? estadoMatch[1] : 'INICIO';\n\n// 2. Limpiar el texto para WhatsApp (quitamos la etiqueta técnica)\nconst textoLimpio = rawOutput.replace(/ESTADO_CONTROL:\\s*\\[?\\w+\\]?/, '').trim();\n\n// 3. Preparar el objeto JSON para la base de datos (para que no de error JSONB)\n// Aquí puedes extraer datos si quieres, por ahora mandamos un objeto vacío válido\nconst datosJSON = {}; \n\nreturn {\n  mensaje_final: textoLimpio,\n  estado_db: nuevoEstado,\n  datos_db: datosJSON, // Esto es un objeto, Postgres lo aceptará\n  wa_id: $node[\"WhatsApp Trigger\"].json.contacts[0].wa_id\n};"
+      }
     },
     {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO waly_sessions (wa_id, estado_actual, datos_recolectados, ultima_interaccion)\nVALUES (\n  '{{ $json.wa_id }}', \n  '{{ $json.estado_db }}', \n  '{{ JSON.stringify($json.datos_db) }}'::jsonb, \n  NOW()\n)\nON CONFLICT (wa_id) \nDO UPDATE SET \n  estado_actual = EXCLUDED.estado_actual,\n  datos_recolectados = EXCLUDED.datos_recolectados,\n  ultima_interaccion = NOW();",
-        "options": {}
-      },
+      "id": "00d97111-cc64-415f-bc21-9f7a0ac0b22b",
+      "name": "Execute a SQL query",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
         1328,
         688
       ],
-      "id": "00d97111-cc64-415f-bc21-9f7a0ac0b22b",
-      "name": "Execute a SQL query",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO waly_sessions (wa_id, estado_actual, datos_recolectados, ultima_interaccion)\nVALUES (\n  '{{ $json.wa_id }}', \n  '{{ $json.estado_db }}', \n  '{{ JSON.stringify($json.datos_db) }}'::jsonb, \n  NOW()\n)\nON CONFLICT (wa_id) \nDO UPDATE SET \n  estado_actual = EXCLUDED.estado_actual,\n  datos_recolectados = EXCLUDED.datos_recolectados,\n  ultima_interaccion = NOW();",
+        "options": {}
+      },
       "credentials": {
         "postgres": {
           "id": "wBtV5OI1ndzqQYGv",
@@ -662,20 +664,20 @@
       }
     },
     {
-      "parameters": {
-        "sessionIdType": "customKey",
-        "sessionKey": "={{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}",
-        "tableName": "chat_histories",
-        "contextWindowLength": 20
-      },
+      "id": "2d743f2a-3413-491d-8413-b758d2d5474f",
+      "name": "Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
       "typeVersion": 1.3,
       "position": [
         736,
         1040
       ],
-      "id": "2d743f2a-3413-491d-8413-b758d2d5474f",
-      "name": "Memory",
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}",
+        "tableName": "chat_histories",
+        "contextWindowLength": 20
+      },
       "credentials": {
         "postgres": {
           "id": "wBtV5OI1ndzqQYGv",
@@ -684,7 +686,6 @@
       }
     }
   ],
-  "pinData": {},
   "connections": {
     "AI Agent": {
       "main": [
@@ -944,15 +945,10 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "fde41d69-8666-4411-924c-75034737b2df",
-  "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "bd844ac2e0a78e956255434541fd9b4d40ba8bc05a0b4283f549857ad36d77c2"
-  },
-  "id": "T6BTXWks0DEQyadF",
+  "pinData": null,
+  "staticData": null,
   "tags": []
 }

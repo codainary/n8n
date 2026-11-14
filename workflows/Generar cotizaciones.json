@@ -1,36 +1,47 @@
 {
+  "id": "uKBtNtb5i7AY0Pnl",
   "name": "Generar cotizaciones",
+  "active": false,
   "nodes": [
     {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "create-quote",
-        "options": {}
-      },
+      "id": "792e4436-6b2d-42b1-bb75-1cc291299ca4",
+      "name": "Webhook",
+      "webhookId": "fccee45b-cbd9-4d89-bfc2-f1e4caa16757",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
         112,
         -560
       ],
-      "id": "792e4436-6b2d-42b1-bb75-1cc291299ca4",
-      "name": "Webhook",
-      "webhookId": "fccee45b-cbd9-4d89-bfc2-f1e4caa16757"
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "create-quote",
+        "options": {}
+      }
     },
     {
-      "parameters": {
-        "jsCode": "const date = new Date();\nconst y = date.getFullYear();\nconst m = String(date.getMonth()+1).padStart(2,'0');\nconst d = String(date.getDate()).padStart(2,'0');\nconst rand = Math.floor(Math.random()*9000)+1000;\n\nreturn [{\n  quotation_id: `Q-${y}${m}${d}-${rand}`,\n  transcripcion: $input.first().json.body.transcripcion\n}];"
-      },
+      "id": "dcdb2c77-58be-4341-a819-55d148dee20d",
+      "name": "Generar quotation_id",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         320,
         -560
       ],
-      "id": "dcdb2c77-58be-4341-a819-55d148dee20d",
-      "name": "Generar quotation_id"
+      "parameters": {
+        "jsCode": "const date = new Date();\nconst y = date.getFullYear();\nconst m = String(date.getMonth()+1).padStart(2,'0');\nconst d = String(date.getDate()).padStart(2,'0');\nconst rand = Math.floor(Math.random()*9000)+1000;\n\nreturn [{\n  quotation_id: `Q-${y}${m}${d}-${rand}`,\n  transcripcion: $input.first().json.body.transcripcion\n}];"
+      }
     },
     {
+      "id": "089a6876-7693-427c-b65f-d67dd67a3292",
+      "name": "Obtener respuestas del admin",
+      "webhookId": "238a2ae0-adbc-4872-9efe-821d996319a5",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        2992,
+        -544
+      ],
       "parameters": {
         "updates": [
           "message"
@@ -39,15 +50,6 @@
           "chatIds": ""
         }
       },
-      "type": "n8n-nodes-base.telegramTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        2992,
-        -544
-      ],
-      "id": "089a6876-7693-427c-b65f-d67dd67a3292",
-      "name": "Obtener respuestas del admin",
-      "webhookId": "238a2ae0-adbc-4872-9efe-821d996319a5",
       "credentials": {
         "telegramApi": {
           "id": "LsgE3lEDJBtluXMw",
@@ -56,6 +58,14 @@
       }
     },
     {
+      "id": "3459fe6a-dec7-47f5-824d-6f95b4646490",
+      "name": "Buscar",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3696,
+        -560
+      ],
       "parameters": {
         "documentId": {
           "__rl": true,
@@ -81,14 +91,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        3696,
-        -560
-      ],
-      "id": "3459fe6a-dec7-47f5-824d-6f95b4646490",
-      "name": "Buscar",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "J5CREspGdtiit71h",
@@ -97,6 +99,14 @@
       }
     },
     {
+      "id": "9c79caac-61b6-4bce-988b-bd1f7be1169f",
+      "name": "If",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3872,
+        -560
+      ],
       "parameters": {
         "conditions": {
           "options": {
@@ -119,17 +129,17 @@
           "combinator": "and"
         },
         "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        3872,
-        -560
-      ],
-      "id": "9c79caac-61b6-4bce-988b-bd1f7be1169f",
-      "name": "If"
+      }
     },
     {
+      "id": "0d860866-4db1-4d15-acf1-96895d6bddf2",
+      "name": "Quote generator",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1488,
+        -560
+      ],
       "parameters": {
         "promptType": "define",
         "text": "=Actúa como el Agente Comercial Senior de Automaverso.com. Tu tarea es generar una propuesta comercial formal (Versión 1) basada en el análisis técnico que recibes del agente anterior.\n\nInstrucciones de contenido:\n\n1. Objetivo: Redacta un párrafo persuasivo que explique cómo esta solución resolverá los problemas específicos del cliente y mejorará su eficiencia.\n\n2. Alcance: Convierte los servicios sugeridos en una lista de hitos técnicos de implementación.\n\n3. Entregables: Lista los productos finales y tangibles que el cliente recibirá (ej: Dashboard, Flujo de n8n, Chatbot activo, etc.).\n\n4. Cálculo de Inversión (CRÍTICO): - Utiliza la herramienta \"Services & Solutions\" para buscar los precios de cada servicio sugerido.\n\n- Implementación inicial: Suma todos los costos de \"Pago único\" o \"Setup\". Debe ser un solo valor total.\n\n- Servicio mensual: Suma todos los costos de \"Mantenimiento\", \"Licencia\" o \"Recurrente\". Debe ser un solo valor total.\n\n- Los montos deben incluir el símbolo de moneda y el identificador (ej. $1,500 USD).\n\nReglas de formato:\n\n- Devuelve ÚNICAMENTE un objeto JSON.\n- No incluyas texto introductorio ni explicaciones fuera del JSON.\n- El estado siempre es \"PENDIENTE\" y la versión es 1.\n\n\nAnálisis técnico para procesar: {{ $('Quote Field Set (1)').item.json.analisis_json }}",
@@ -137,17 +147,17 @@
         "options": {
           "systemMessage": "Eres agente comercial de Automaverso.\nUsa SOLO servicios reales.\nNo inventes precios."
         }
-      },
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3,
-      "position": [
-        1488,
-        -560
-      ],
-      "id": "0d860866-4db1-4d15-acf1-96895d6bddf2",
-      "name": "Quote generator"
+      }
     },
     {
+      "id": "f230fff9-489a-4190-8c5b-512413f12b25",
+      "name": "Generator model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1488,
+        -352
+      ],
       "parameters": {
         "model": {
           "__rl": true,
@@ -157,14 +167,6 @@
         "builtInTools": {},
         "options": {}
       },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.3,
-      "position": [
-        1488,
-        -352
-      ],
-      "id": "f230fff9-489a-4190-8c5b-512413f12b25",
-      "name": "Generator model",
       "credentials": {
         "openAiApi": {
           "id": "HFYYCNOlxVaJreXW",
@@ -173,6 +175,14 @@
       }
     },
     {
+      "id": "5e958540-ea40-4e01-819d-f16addb0c185",
+      "name": "Register quote",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1136,
+        -560
+      ],
       "parameters": {
         "operation": "append",
         "documentId": {
@@ -333,14 +343,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        1136,
-        -560
-      ],
-      "id": "5e958540-ea40-4e01-819d-f16addb0c185",
-      "name": "Register quote",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "J5CREspGdtiit71h",
@@ -349,6 +351,14 @@
       }
     },
     {
+      "id": "95e909b7-917a-44f9-99f8-72378b2d364d",
+      "name": "Save quote analysis",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2048,
+        -560
+      ],
       "parameters": {
         "operation": "update",
         "documentId": {
@@ -490,14 +500,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        2048,
-        -560
-      ],
-      "id": "95e909b7-917a-44f9-99f8-72378b2d364d",
-      "name": "Save quote analysis",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "J5CREspGdtiit71h",
@@ -506,6 +508,15 @@
       }
     },
     {
+      "id": "df693444-0e9a-4873-81a5-8347aa44b211",
+      "name": "Submit for approval",
+      "webhookId": "00fb0d6d-0de0-48ae-9fe0-9d8b81a4cd7e",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3328,
+        -960
+      ],
       "parameters": {
         "chatId": "={{ $('Telegram Fields').item.json.chatID }}",
         "text": "={{ $('Telegram Message').item.json.mensaje_final }}",
@@ -513,15 +524,6 @@
           "message_thread_id": "={{ $('Telegram Fields').item.json.thread_id }}"
         }
       },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        3328,
-        -960
-      ],
-      "id": "df693444-0e9a-4873-81a5-8347aa44b211",
-      "name": "Submit for approval",
-      "webhookId": "00fb0d6d-0de0-48ae-9fe0-9d8b81a4cd7e",
       "credentials": {
         "telegramApi": {
           "id": "LsgE3lEDJBtluXMw",
@@ -530,6 +532,14 @@
       }
     },
     {
+      "id": "cb1953e8-c254-4ee1-972b-fee9022eae7f",
+      "name": "Save message ID",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2608,
+        -704
+      ],
       "parameters": {
         "operation": "update",
         "documentId": {
@@ -672,14 +682,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        2608,
-        -704
-      ],
-      "id": "cb1953e8-c254-4ee1-972b-fee9022eae7f",
-      "name": "Save message ID",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "J5CREspGdtiit71h",
@@ -688,6 +690,14 @@
       }
     },
     {
+      "id": "02c9c434-19e4-41e3-a512-0cbe36aa58d8",
+      "name": "Update quote status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4160,
+        -576
+      ],
       "parameters": {
         "operation": "update",
         "documentId": {
@@ -842,14 +852,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        4160,
-        -576
-      ],
-      "id": "02c9c434-19e4-41e3-a512-0cbe36aa58d8",
-      "name": "Update quote status",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "J5CREspGdtiit71h",
@@ -858,23 +860,31 @@
       }
     },
     {
-      "parameters": {
-        "promptType": "define",
-        "text": "=Estás evaluando la respuesta de un administrador\na una cotización comercial.\n\nTu tarea es clasificar la intención del mensaje\nrespecto a la cotización COMPLETA, no a entregables individuales.\n\nDefiniciones obligatorias:\n\n- Responde APROBADA\n  SOLO si el mensaje expresa aceptación clara y total\n  de la cotización (ej: \"aprobado\", \"ok\", \"está bien\",\n  \"aceptamos\", \"perfecto\", \"dale\").\n\n- Responde CORRECCIONES\n  si el mensaje:\n  • solicita cambios de alcance, entregables o precio\n  • excluye o modifica partes de la propuesta\n  • condiciona la aceptación\n  • rechaza entregables específicos\n  • propone una versión ajustada\n  • o no acepta la cotización tal como fue enviada\n\n- Responde RECHAZADA\n  SOLO si el mensaje rechaza explícitamente\n  la cotización completa o la continuidad del proyecto\n  (ej: \"rechazamos la cotización\",\n  \"no vamos a continuar\",\n  \"no aceptamos la propuesta\").\n\nRegla crítica:\n- Negar entregables, alcance o condiciones\n  NO es rechazo total.\n- Si no hay rechazo explícito de la cotización,\n  NUNCA respondas RECHAZADA.\n\nSi el mensaje es ambiguo o no deja clara\nla aceptación total, responde CORRECCIONES.\n\nMensaje del administrador:\n{{ $('Obtener respuestas del admin').item.json.message.text }}\n\nResponde SOLO con una de estas palabras en mayúsculas:\nAPROBADA\nRECHAZADA\nCORRECCIONES\n",
-        "options": {
-          "systemMessage": "Eres un clasificador de decisiones administrativas\ndentro de un flujo de aprobación de cotizaciones.\n\nTu única tarea es clasificar la intención del administrador.\nNo expliques tu respuesta.\nNo inventes información."
-        }
-      },
+      "id": "293cc268-e9b0-42f7-96c8-78c3fe93b557",
+      "name": "Classifier",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3,
       "position": [
         4368,
         -576
       ],
-      "id": "293cc268-e9b0-42f7-96c8-78c3fe93b557",
-      "name": "Classifier"
+      "parameters": {
+        "promptType": "define",
+        "text": "=Estás evaluando la respuesta de un administrador\na una cotización comercial.\n\nTu tarea es clasificar la intención del mensaje\nrespecto a la cotización COMPLETA, no a entregables individuales.\n\nDefiniciones obligatorias:\n\n- Responde APROBADA\n  SOLO si el mensaje expresa aceptación clara y total\n  de la cotización (ej: \"aprobado\", \"ok\", \"está bien\",\n  \"aceptamos\", \"perfecto\", \"dale\").\n\n- Responde CORRECCIONES\n  si el mensaje:\n  • solicita cambios de alcance, entregables o precio\n  • excluye o modifica partes de la propuesta\n  • condiciona la aceptación\n  • rechaza entregables específicos\n  • propone una versión ajustada\n  • o no acepta la cotización tal como fue enviada\n\n- Responde RECHAZADA\n  SOLO si el mensaje rechaza explícitamente\n  la cotización completa o la continuidad del proyecto\n  (ej: \"rechazamos la cotización\",\n  \"no vamos a continuar\",\n  \"no aceptamos la propuesta\").\n\nRegla crítica:\n- Negar entregables, alcance o condiciones\n  NO es rechazo total.\n- Si no hay rechazo explícito de la cotización,\n  NUNCA respondas RECHAZADA.\n\nSi el mensaje es ambiguo o no deja clara\nla aceptación total, responde CORRECCIONES.\n\nMensaje del administrador:\n{{ $('Obtener respuestas del admin').item.json.message.text }}\n\nResponde SOLO con una de estas palabras en mayúsculas:\nAPROBADA\nRECHAZADA\nCORRECCIONES\n",
+        "options": {
+          "systemMessage": "Eres un clasificador de decisiones administrativas\ndentro de un flujo de aprobación de cotizaciones.\n\nTu única tarea es clasificar la intención del administrador.\nNo expliques tu respuesta.\nNo inventes información."
+        }
+      }
     },
     {
+      "id": "984ca5bb-48ab-445a-b1ab-d24c99a85726",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        4704,
+        -592
+      ],
       "parameters": {
         "rules": {
           "values": [
@@ -955,17 +965,17 @@
           ]
         },
         "options": {}
-      },
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3.4,
-      "position": [
-        4704,
-        -592
-      ],
-      "id": "984ca5bb-48ab-445a-b1ab-d24c99a85726",
-      "name": "Switch"
+      }
     },
     {
+      "id": "a5b524c5-ed12-4f03-9012-e4a54bb6dfab",
+      "name": "Quotation adjuster",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        5072,
+        -480
+      ],
       "parameters": {
         "promptType": "define",
         "text": "=Cotización actual:\n{{ $('Buscar').item.json.cotizacion_json }}\n\nCorrecciones:\n{{ $('Resolver quotation_id').item.json.admin_text }}\n\nAplica SOLO lo solicitado.\nIncrementa la versión actual: {{ $('Buscar').item.json.version }}\nDevuelve JSON.",
@@ -973,30 +983,30 @@
         "options": {
           "systemMessage": "Eres un agente comercial especializado y mejorar las cotizaciones que genera el sistema aplicando excluisvamente las correciones solicitadas por el administrador"
         }
-      },
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3,
-      "position": [
-        5072,
-        -480
-      ],
-      "id": "a5b524c5-ed12-4f03-9012-e4a54bb6dfab",
-      "name": "Quotation adjuster"
+      }
     },
     {
-      "parameters": {
-        "jsonSchemaExample": "{\n  \"cotizacion_json\": \"nuevo\",\n  \"version\": 2,\n  \"estado\": \"PENDIENTE\",\n  \"locked\": false\n}"
-      },
+      "id": "5944278e-cefc-4b64-b4e6-a12c22c694f3",
+      "name": "Structured output",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
       "position": [
         5216,
         -272
       ],
-      "id": "5944278e-cefc-4b64-b4e6-a12c22c694f3",
-      "name": "Structured output"
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"cotizacion_json\": \"nuevo\",\n  \"version\": 2,\n  \"estado\": \"PENDIENTE\",\n  \"locked\": false\n}"
+      }
     },
     {
+      "id": "148cdfdc-21cb-43f7-aa29-2fa156d46bea",
+      "name": "Model adjuster",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        5072,
+        -272
+      ],
       "parameters": {
         "model": {
           "__rl": true,
@@ -1006,14 +1016,6 @@
         "builtInTools": {},
         "options": {}
       },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.3,
-      "position": [
-        5072,
-        -272
-      ],
-      "id": "148cdfdc-21cb-43f7-aa29-2fa156d46bea",
-      "name": "Model adjuster",
       "credentials": {
         "openAiApi": {
           "id": "HFYYCNOlxVaJreXW",
@@ -1022,6 +1024,15 @@
       }
     },
     {
+      "id": "89849696-787b-48ac-a17d-453caaade1d9",
+      "name": "Send adjust for approval",
+      "webhookId": "00fb0d6d-0de0-48ae-9fe0-9d8b81a4cd7e",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        5840,
+        -480
+      ],
       "parameters": {
         "chatId": "8552664756",
         "text": "={{ $json.telegram_message }}",
@@ -1029,15 +1040,6 @@
           "reply_to_message_id": "={{ $('Obtener respuestas del admin').item.json.message.reply_to_message.message_id }}"
         }
       },
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        5840,
-        -480
-      ],
-      "id": "89849696-787b-48ac-a17d-453caaade1d9",
-      "name": "Send adjust for approval",
-      "webhookId": "00fb0d6d-0de0-48ae-9fe0-9d8b81a4cd7e",
       "credentials": {
         "telegramApi": {
           "id": "LsgE3lEDJBtluXMw",
@@ -1046,19 +1048,27 @@
       }
     },
     {
-      "parameters": {
-        "jsCode": "// 1. Extraer datos base\nconst raw = $json.output || $json;\nconst version = raw.version || 1;\n\n// 2. Parsear el JSON (viene como string)\nlet cotizacion;\ntry {\n  cotizacion = JSON.parse(raw.cotizacion_json);\n} catch (e) {\n  throw new Error('No se pudo parsear cotizacion_json');\n}\n\n// 3. Helpers\nconst bullets = (arr) =>\n  arr && arr.length\n    ? arr.map(item => `• ${item}`).join('\\n')\n    : '• No especificado';\n\n// 4. Construir texto final\nconst mensaje = `\n📄 Cotización\nVersión ${version}\n\nOBJETIVO:\n${cotizacion.objetivo}\n\nALCANCE:\n${bullets(cotizacion.alcance)}\n\nENTREGABLES:\n${bullets(cotizacion.entregables)}\n\nINVERSIÓN:\nImplementación: ${cotizacion.inversion.implementacion.monto}\nMensual: ${cotizacion.inversion.recurrente_mensual.monto}\n\n✍️ Responde directamente con:\n• \"Aprobado\"\n• O escribe las correcciones\n`.trim();\n\n// 5. Retornar listo para Telegram\nreturn [{\n  telegram_message: mensaje\n}];\n"
-      },
+      "id": "5a12f238-983c-45c4-a805-e941cdb3fb55",
+      "name": "Format text2",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         5632,
         -480
       ],
-      "id": "5a12f238-983c-45c4-a805-e941cdb3fb55",
-      "name": "Format text2"
+      "parameters": {
+        "jsCode": "// 1. Extraer datos base\nconst raw = $json.output || $json;\nconst version = raw.version || 1;\n\n// 2. Parsear el JSON (viene como string)\nlet cotizacion;\ntry {\n  cotizacion = JSON.parse(raw.cotizacion_json);\n} catch (e) {\n  throw new Error('No se pudo parsear cotizacion_json');\n}\n\n// 3. Helpers\nconst bullets = (arr) =>\n  arr && arr.length\n    ? arr.map(item => `• ${item}`).join('\\n')\n    : '• No especificado';\n\n// 4. Construir texto final\nconst mensaje = `\n📄 Cotización\nVersión ${version}\n\nOBJETIVO:\n${cotizacion.objetivo}\n\nALCANCE:\n${bullets(cotizacion.alcance)}\n\nENTREGABLES:\n${bullets(cotizacion.entregables)}\n\nINVERSIÓN:\nImplementación: ${cotizacion.inversion.implementacion.monto}\nMensual: ${cotizacion.inversion.recurrente_mensual.monto}\n\n✍️ Responde directamente con:\n• \"Aprobado\"\n• O escribe las correcciones\n`.trim();\n\n// 5. Retornar listo para Telegram\nreturn [{\n  telegram_message: mensaje\n}];\n"
+      }
     },
     {
+      "id": "d0137fcc-006f-4108-82b2-d9dd35c5f99f",
+      "name": "Update status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        5072,
+        -704
+      ],
       "parameters": {
         "operation": "update",
         "documentId": {
@@ -1213,14 +1223,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        5072,
-        -704
-      ],
-      "id": "d0137fcc-006f-4108-82b2-d9dd35c5f99f",
-      "name": "Update status",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "J5CREspGdtiit71h",
@@ -1229,6 +1231,14 @@
       }
     },
     {
+      "id": "71b5403f-87e4-4f27-9e10-064d37bf395c",
+      "name": "Get approved quote",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        5296,
+        -704
+      ],
       "parameters": {
         "documentId": {
           "__rl": true,
@@ -1258,14 +1268,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        5296,
-        -704
-      ],
-      "id": "71b5403f-87e4-4f27-9e10-064d37bf395c",
-      "name": "Get approved quote",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "J5CREspGdtiit71h",
@@ -1274,6 +1276,14 @@
       }
     },
     {
+      "id": "12606e39-5e4e-48cb-a9a2-eb01cc92d3b6",
+      "name": "Create base template",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        5760,
+        -704
+      ],
       "parameters": {
         "operation": "copy",
         "fileId": {
@@ -1299,14 +1309,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
-      "position": [
-        5760,
-        -704
-      ],
-      "id": "12606e39-5e4e-48cb-a9a2-eb01cc92d3b6",
-      "name": "Create base template",
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "swJlKwmpyVh7TQEW",
@@ -1315,19 +1317,27 @@
       }
     },
     {
-      "parameters": {
-        "jsCode": "// 1. Obtenemos el objeto principal\nconst item = $input.first().json;\n\n// 2. Parseamos la cadena 'cotizacion_json'\nlet cotizacion;\ntry {\n  cotizacion = JSON.parse(item.cotizacion_json);\n} catch (e) {\n  return { json: { error: \"No se pudo leer cotizacion_json\", detalle: e.message } };\n}\n\n// 3. Función auxiliar para convertir arrays en listas con viñetas\nconst formatList = (array) => {\n  if (!array || !Array.isArray(array)) return \"No especificado\";\n  return array.map(i => `• ${i}`).join('\\n');\n};\n\n// 4. Preparamos los campos específicos\nreturn {\n  json: {\n    ...item, // Mantenemos ID, fechas, etc.\n    \n    // Texto simple\n    objetivo_docs: cotizacion.objetivo || \"No especificado\",\n    \n    // Listas con viñetas\n    alcance_docs: formatList(cotizacion.alcance),\n    entregables_docs: formatList(cotizacion.entregables),\n    \n    // Montos por separado\n    monto_implementacion: cotizacion.inversion?.implementacion?.monto || \"$0\",\n    monto_recurrente: cotizacion.inversion?.recurrente_mensual?.monto || \"$0\",\n    \n    // Por si necesitas la moneda por separado\n    moneda: cotizacion.inversion?.moneda || \"USD\"\n  }\n};"
-      },
+      "id": "ce0bee6b-9721-4169-a4e7-c6882f71979a",
+      "name": "Quote final values",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         5520,
         -704
       ],
-      "id": "ce0bee6b-9721-4169-a4e7-c6882f71979a",
-      "name": "Quote final values"
+      "parameters": {
+        "jsCode": "// 1. Obtenemos el objeto principal\nconst item = $input.first().json;\n\n// 2. Parseamos la cadena 'cotizacion_json'\nlet cotizacion;\ntry {\n  cotizacion = JSON.parse(item.cotizacion_json);\n} catch (e) {\n  return { json: { error: \"No se pudo leer cotizacion_json\", detalle: e.message } };\n}\n\n// 3. Función auxiliar para convertir arrays en listas con viñetas\nconst formatList = (array) => {\n  if (!array || !Array.isArray(array)) return \"No especificado\";\n  return array.map(i => `• ${i}`).join('\\n');\n};\n\n// 4. Preparamos los campos específicos\nreturn {\n  json: {\n    ...item, // Mantenemos ID, fechas, etc.\n    \n    // Texto simple\n    objetivo_docs: cotizacion.objetivo || \"No especificado\",\n    \n    // Listas con viñetas\n    alcance_docs: formatList(cotizacion.alcance),\n    entregables_docs: formatList(cotizacion.entregables),\n    \n    // Montos por separado\n    monto_implementacion: cotizacion.inversion?.implementacion?.monto || \"$0\",\n    monto_recurrente: cotizacion.inversion?.recurrente_mensual?.monto || \"$0\",\n    \n    // Por si necesitas la moneda por separado\n    moneda: cotizacion.inversion?.moneda || \"USD\"\n  }\n};"
+      }
     },
     {
+      "id": "0f31f205-c899-4855-8ae1-a4b5411c87ff",
+      "name": "Update quote values",
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        5968,
+        -704
+      ],
       "parameters": {
         "operation": "update",
         "documentURL": "={{ $json.id }}",
@@ -1362,14 +1372,6 @@
           ]
         }
       },
-      "type": "n8n-nodes-base.googleDocs",
-      "typeVersion": 2,
-      "position": [
-        5968,
-        -704
-      ],
-      "id": "0f31f205-c899-4855-8ae1-a4b5411c87ff",
-      "name": "Update quote values",
       "credentials": {
         "googleDocsOAuth2Api": {
           "id": "i1c9nIMARLREy2pJ",
@@ -1378,6 +1380,14 @@
       }
     },
     {
+      "id": "d46379a7-9ca2-4554-854c-218999464b24",
+      "name": "Transcription Analyst",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        544,
+        -560
+      ],
       "parameters": {
         "promptType": "define",
         "text": "=Actúa como un Analista de Automatización Senior en Automaverso. Tu tarea es extraer información estructurada de una transcripción de reunión que contiene lenguaje coloquial, repeticiones y ambigüedades y la cual corresponde a una asesoría entregada a un prospecto (Lead).\n\nDebes filtrar las muletillas y divagaciones para identificar los datos reales del negocio y sus puntos de dolor.\n\nExtrae la información siguiendo estas reglas:\n\n1. Objetivo: Resume la meta principal en una frase profesional.\n2. Procesos: Identifica las tareas manuales o ineficientes mencionadas.\n3. Necesidades: Detecta qué requiere el lead para solucionar su caos actual.\n4. Servicios: Sugiere soluciones de Automaverso con una breve justificación técnica basandote en la herramienta (tool) \"Services & Solutions\".\n\nDevuelve ÚNICAMENTE un objeto JSON con esta estructura:\n\n{ \"cliente\": { \"nombre\": \"Nombre del contacto\", \"empresa\": \"Nombre de la compañía\", \"ubicacion\": \"Ciudad o país\", \"cargo\": \"Puesto del contacto\" }, \"objetivo_principal\": \"Descripción del objetivo\", \"procesos\": [\"proceso 1\", \"proceso 2\"], \"necesidades\": [\"necesidad 1\", \"necesidad 2\"], \"servicios_automaverso_sugeridos\": [ { \"servicio\": \"Nombre del servicio\", \"justificacion\": \"Por qué lo necesita\" } ] }\n\nSi un dato no es mencionado, coloca \"No especificado\".\n\nTranscripción: {{ $json.transcripcion }}",
@@ -1385,17 +1395,17 @@
         "options": {
           "systemMessage": "Eres agente comercial de Automaverso.\nUsa SOLO servicios reales.\nNo inventes precios."
         }
-      },
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3,
-      "position": [
-        544,
-        -560
-      ],
-      "id": "d46379a7-9ca2-4554-854c-218999464b24",
-      "name": "Transcription Analyst"
+      }
     },
     {
+      "id": "08520494-f970-4db6-bfb5-b57c97cf3ad5",
+      "name": "Services & Solutions",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        2800,
+        128
+      ],
       "parameters": {
         "documentId": {
           "__rl": true,
@@ -1413,14 +1423,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheetsTool",
-      "typeVersion": 4.7,
-      "position": [
-        2800,
-        128
-      ],
-      "id": "08520494-f970-4db6-bfb5-b57c97cf3ad5",
-      "name": "Services & Solutions",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "J5CREspGdtiit71h",
@@ -1429,6 +1431,14 @@
       }
     },
     {
+      "id": "f1fd4f79-c33b-4dd5-9cdc-299285652101",
+      "name": "Transcription Analyst Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        544,
+        -352
+      ],
       "parameters": {
         "model": {
           "__rl": true,
@@ -1442,14 +1452,6 @@
         },
         "options": {}
       },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.3,
-      "position": [
-        544,
-        -352
-      ],
-      "id": "f1fd4f79-c33b-4dd5-9cdc-299285652101",
-      "name": "Transcription Analyst Model",
       "credentials": {
         "openAiApi": {
           "id": "HFYYCNOlxVaJreXW",
@@ -1458,22 +1460,30 @@
       }
     },
     {
-      "parameters": {
-        "content": "## Company Knowledge Base",
-        "height": 320,
-        "width": 1392,
-        "color": 6
-      },
+      "id": "9122ddcc-46c3-4a58-9d1a-5ec99f97e831",
+      "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         2208,
         0
       ],
-      "id": "9122ddcc-46c3-4a58-9d1a-5ec99f97e831",
-      "name": "Sticky Note"
+      "parameters": {
+        "content": "## Company Knowledge Base",
+        "height": 320,
+        "width": 1392,
+        "color": 6
+      }
     },
     {
+      "id": "0adcbb2d-b2ff-4765-9dc7-c5cee56629b4",
+      "name": "Quote Field Set (2)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1840,
+        -560
+      ],
       "parameters": {
         "assignments": {
           "assignments": [
@@ -1486,17 +1496,17 @@
           ]
         },
         "options": {}
-      },
+      }
+    },
+    {
+      "id": "b431d19a-8ec3-4258-8912-2a66036d9543",
+      "name": "Quote Field Set (1)",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        1840,
+        896,
         -560
       ],
-      "id": "0adcbb2d-b2ff-4765-9dc7-c5cee56629b4",
-      "name": "Quote Field Set (2)"
-    },
-    {
       "parameters": {
         "assignments": {
           "assignments": [
@@ -1533,91 +1543,91 @@
           ]
         },
         "options": {}
-      },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        896,
-        -560
-      ],
-      "id": "b431d19a-8ec3-4258-8912-2a66036d9543",
-      "name": "Quote Field Set (1)"
+      }
     },
     {
-      "parameters": {
-        "content": "## Transcript Analysis & Initial Quote Generation",
-        "height": 672,
-        "width": 1344
-      },
+      "id": "6b9b884e-4cde-4f86-a7d2-1ca9ed3a7dc9",
+      "name": "Sticky Note2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
         -752
       ],
-      "id": "6b9b884e-4cde-4f86-a7d2-1ca9ed3a7dc9",
-      "name": "Sticky Note2"
+      "parameters": {
+        "content": "## Transcript Analysis & Initial Quote Generation",
+        "height": 672,
+        "width": 1344
+      }
     },
     {
-      "parameters": {
-        "jsonSchemaExample": "{\n  \"objetivo\": \"Optimizar la operatividad de Suministros Globales J&M mediante una infraestructura digital automatizada que centralice la captación de leads y la gestión de pedidos, eliminando errores manuales y garantizando una respuesta inmediata que incremente la tasa de conversión comercial.\",\n  \"alcance\": [\n    \"Configuración y despliegue de flujos RPA para gestión de leads\",\n    \"Desarrollo e integración de Chatbot IA en WhatsApp y Web\",\n    \"Sincronización técnica de CRM con bases de datos existentes\",\n    \"Diseño y despliegue de Dashboards de analítica en tiempo real\",\n    \"Sesiones de capacitación técnica y entrega de documentación operativa\"\n  ],\n  \"entregables\": [\n    \"Chatbot de IA configurado y activo\",\n    \"Flujos de automatización en n8n plenamente operativos\",\n    \"Panel de control (Dashboard) de ventas y cotizaciones\",\n    \"Manuales de Procedimientos Estándar (SOPs) digitales\",\n    \"Acceso a entorno integrado de CRM y herramientas de venta\"\n  ],\n  \"inversion\": {\n    \"implementacion\": \"$1,250 USD\",\n    \"recurrente_mensual\": \"$250 USD\",\n    \"moneda\": \"USD\"\n  },\n  \"version\": 1,\n  \"estado\": \"PENDIENTE\"\n}"
-      },
+      "id": "9d492c70-5083-4d42-8eb7-63d26fe054ac",
+      "name": "Output [002]",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
       "position": [
         1632,
         -352
       ],
-      "id": "9d492c70-5083-4d42-8eb7-63d26fe054ac",
-      "name": "Output [002]"
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"objetivo\": \"Optimizar la operatividad de Suministros Globales J&M mediante una infraestructura digital automatizada que centralice la captación de leads y la gestión de pedidos, eliminando errores manuales y garantizando una respuesta inmediata que incremente la tasa de conversión comercial.\",\n  \"alcance\": [\n    \"Configuración y despliegue de flujos RPA para gestión de leads\",\n    \"Desarrollo e integración de Chatbot IA en WhatsApp y Web\",\n    \"Sincronización técnica de CRM con bases de datos existentes\",\n    \"Diseño y despliegue de Dashboards de analítica en tiempo real\",\n    \"Sesiones de capacitación técnica y entrega de documentación operativa\"\n  ],\n  \"entregables\": [\n    \"Chatbot de IA configurado y activo\",\n    \"Flujos de automatización en n8n plenamente operativos\",\n    \"Panel de control (Dashboard) de ventas y cotizaciones\",\n    \"Manuales de Procedimientos Estándar (SOPs) digitales\",\n    \"Acceso a entorno integrado de CRM y herramientas de venta\"\n  ],\n  \"inversion\": {\n    \"implementacion\": \"$1,250 USD\",\n    \"recurrente_mensual\": \"$250 USD\",\n    \"moneda\": \"USD\"\n  },\n  \"version\": 1,\n  \"estado\": \"PENDIENTE\"\n}"
+      }
     },
     {
-      "parameters": {
-        "schemaType": "manual",
-        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"cliente\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"nombre\": {\n          \"type\": \"string\",\n          \"description\": \"Nombre de la persona de contacto.\"\n        },\n        \"empresa\": {\n          \"type\": \"string\",\n          \"description\": \"Nombre de la compañía o negocio.\"\n        },\n        \"ubicacion\": {\n          \"type\": \"string\",\n          \"description\": \"Ciudad, país o zona donde se encuentra la empresa.\"\n        },\n        \"cargo\": {\n          \"type\": \"string\",\n          \"description\": \"Puesto o rol del contacto en la empresa.\"\n        }\n      },\n      \"required\": [\"nombre\", \"empresa\", \"ubicacion\", \"cargo\"]\n    },\n    \"objetivo_principal\": {\n      \"type\": \"string\",\n      \"description\": \"La meta número uno que el cliente busca alcanzar.\"\n    },\n    \"procesos\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Lista de flujos de trabajo o pasos operativos actuales del cliente.\"\n    },\n    \"necesidades\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Puntos de dolor, carencias o requerimientos específicos identificados.\"\n    },\n    \"servicios_automaverso_sugeridos\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"servicio\": {\n            \"type\": \"string\"\n          },\n          \"justificacion\": {\n            \"type\": \"string\",\n            \"description\": \"Por qué este servicio de Automaverso es ideal para este cliente.\"\n          }\n        },\n        \"required\": [\"servicio\", \"justificacion\"]\n      },\n      \"description\": \"Propuesta de servicios de Automaverso basados en el análisis.\"\n    }\n  },\n  \"required\": [\n    \"cliente\",\n    \"objetivo_principal\",\n    \"procesos\",\n    \"necesidades\",\n    \"servicios_automaverso_sugeridos\"\n  ]\n}"
-      },
+      "id": "50341733-f6eb-4a63-bc98-d32176d13a2b",
+      "name": "Output [001]",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
       "position": [
         688,
         -352
       ],
-      "id": "50341733-f6eb-4a63-bc98-d32176d13a2b",
-      "name": "Output [001]"
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"cliente\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"nombre\": {\n          \"type\": \"string\",\n          \"description\": \"Nombre de la persona de contacto.\"\n        },\n        \"empresa\": {\n          \"type\": \"string\",\n          \"description\": \"Nombre de la compañía o negocio.\"\n        },\n        \"ubicacion\": {\n          \"type\": \"string\",\n          \"description\": \"Ciudad, país o zona donde se encuentra la empresa.\"\n        },\n        \"cargo\": {\n          \"type\": \"string\",\n          \"description\": \"Puesto o rol del contacto en la empresa.\"\n        }\n      },\n      \"required\": [\"nombre\", \"empresa\", \"ubicacion\", \"cargo\"]\n    },\n    \"objetivo_principal\": {\n      \"type\": \"string\",\n      \"description\": \"La meta número uno que el cliente busca alcanzar.\"\n    },\n    \"procesos\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Lista de flujos de trabajo o pasos operativos actuales del cliente.\"\n    },\n    \"necesidades\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      },\n      \"description\": \"Puntos de dolor, carencias o requerimientos específicos identificados.\"\n    },\n    \"servicios_automaverso_sugeridos\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"servicio\": {\n            \"type\": \"string\"\n          },\n          \"justificacion\": {\n            \"type\": \"string\",\n            \"description\": \"Por qué este servicio de Automaverso es ideal para este cliente.\"\n          }\n        },\n        \"required\": [\"servicio\", \"justificacion\"]\n      },\n      \"description\": \"Propuesta de servicios de Automaverso basados en el análisis.\"\n    }\n  },\n  \"required\": [\n    \"cliente\",\n    \"objetivo_principal\",\n    \"procesos\",\n    \"necesidades\",\n    \"servicios_automaverso_sugeridos\"\n  ]\n}"
+      }
     },
     {
-      "parameters": {
-        "content": "## Analyze Transcription & Draft Proposal",
-        "height": 672,
-        "width": 1504,
-        "color": 7
-      },
+      "id": "7720622b-c2ce-47e4-86af-9d89603113c3",
+      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         1312,
         -752
       ],
-      "id": "7720622b-c2ce-47e4-86af-9d89603113c3",
-      "name": "Sticky Note1"
+      "parameters": {
+        "content": "## Analyze Transcription & Draft Proposal",
+        "height": 672,
+        "width": 1504,
+        "color": 7
+      }
     },
     {
-      "parameters": {
-        "content": "## Process Admin Suggestions & Update Proposal",
-        "height": 672,
-        "width": 3376,
-        "color": 5
-      },
+      "id": "148d9acd-de44-46a3-bf1a-e38f8bf52f3a",
+      "name": "Sticky Note3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         2880,
         -752
       ],
-      "id": "148d9acd-de44-46a3-bf1a-e38f8bf52f3a",
-      "name": "Sticky Note3"
+      "parameters": {
+        "content": "## Process Admin Suggestions & Update Proposal",
+        "height": 672,
+        "width": 3376,
+        "color": 5
+      }
     },
     {
+      "id": "175f8f3b-825b-4894-9b45-888c53949ec5",
+      "name": "Update quote adjust",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        5424,
+        -480
+      ],
       "parameters": {
         "operation": "update",
         "documentId": {
@@ -1775,14 +1785,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        5424,
-        -480
-      ],
-      "id": "175f8f3b-825b-4894-9b45-888c53949ec5",
-      "name": "Update quote adjust",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "J5CREspGdtiit71h",
@@ -1791,6 +1793,14 @@
       }
     },
     {
+      "id": "2fc2de0c-fa27-4139-bfa2-9e1a1da4c45a",
+      "name": "Model classifier",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        4368,
+        -352
+      ],
       "parameters": {
         "model": {
           "__rl": true,
@@ -1800,14 +1810,6 @@
         "builtInTools": {},
         "options": {}
       },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.3,
-      "position": [
-        4368,
-        -352
-      ],
-      "id": "2fc2de0c-fa27-4139-bfa2-9e1a1da4c45a",
-      "name": "Model classifier",
       "credentials": {
         "openAiApi": {
           "id": "HFYYCNOlxVaJreXW",
@@ -1816,6 +1818,14 @@
       }
     },
     {
+      "id": "63d99170-9aca-4225-928c-6162b620c69f",
+      "name": "Telegram Topic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2544,
+        -960
+      ],
       "parameters": {
         "method": "POST",
         "url": "=https://api.telegram.org/bot8311437457:AAFzAqVxVo3Ee8DpFd2EXku2N3FqfxYazdo/createForumTopic",
@@ -1823,17 +1833,17 @@
         "specifyBody": "json",
         "jsonBody": "={\n  \"chat_id\": \"-1003655419293\",\n  \"name\": \"{{ $('Generar quotation_id').item.json.quotation_id }} - {{ $('Quote Field Set (1)').item.json.analisis_json.cliente.nombre }}\"\n}\n",
         "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.3,
-      "position": [
-        2544,
-        -960
-      ],
-      "id": "63d99170-9aca-4225-928c-6162b620c69f",
-      "name": "Telegram Topic"
+      }
     },
     {
+      "id": "2946235b-635a-4ca5-9ce8-e04ba4dacad2",
+      "name": "Save Topic",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3040,
+        -960
+      ],
       "parameters": {
         "operation": "update",
         "documentId": {
@@ -2007,14 +2017,6 @@
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        3040,
-        -960
-      ],
-      "id": "2946235b-635a-4ca5-9ce8-e04ba4dacad2",
-      "name": "Save Topic",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "J5CREspGdtiit71h",
@@ -2023,6 +2025,14 @@
       }
     },
     {
+      "id": "72b0f61a-39b3-4322-8d3f-cdf284128c04",
+      "name": "Telegram Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2800,
+        -960
+      ],
       "parameters": {
         "assignments": {
           "assignments": [
@@ -2041,30 +2051,30 @@
           ]
         },
         "options": {}
-      },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        2800,
-        -960
-      ],
-      "id": "72b0f61a-39b3-4322-8d3f-cdf284128c04",
-      "name": "Telegram Fields"
+      }
     },
     {
-      "parameters": {
-        "jsCode": "// Recorremos todos los elementos de entrada\nreturn items.map(item => {\n  // Accedemos directamente al objeto cotizacion_json que viene del nodo anterior\n  const cot = item.json.cotizacion_json;\n\n  // Validamos que el objeto exista para evitar errores\n  if (!cot) {\n    return { json: { error: \"No se encontró el objeto cotizacion_json\" } };\n  }\n\n  // 1. Formateamos los arreglos (arrays) para que sean listas con viñetas\n  const alcanceTexto = cot.alcance.map(line => `• ${line}`).join('\\n');\n  const entregablesTexto = cot.entregables.map(line => `• ${line}`).join('\\n');\n\n  // 2. Generamos un ID de cotización aleatorio\n  const quoteId = Math.floor(Math.random() * 9000) + 1000;\n\n  // 3. Construimos el mensaje final\n  // Nota: Ya no usamos .monto porque el string ya incluye el símbolo y la moneda\n  const mensaje = `📄 *Cotización #${quoteId}*\n*Versión:* ${cot.version}\n\n*OBJETIVO:*\n${cot.objetivo}\n\n*ALCANCE:*\n${alcanceTexto}\n\n*ENTREGABLES:*\n${entregablesTexto}\n\n*INVERSIÓN:*\n• *Implementación:* ${cot.inversion.implementacion}\n• *Servicio Mensual:* ${cot.inversion.recurrente_mensual}\n\n✍️ *Responde directamente con:*\n• \"Aprobado\"\n• O escribe tus correcciones`;\n\n  return {\n    json: {\n      mensaje_final: mensaje,\n      metadata: {\n        version: cot.version,\n        id_referencia: quoteId,\n        estado: cot.estado\n      }\n    }\n  };\n});"
-      },
+      "id": "b689c740-506d-4cc5-9952-43e0e0cba628",
+      "name": "Telegram Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         2240,
         -560
       ],
-      "id": "b689c740-506d-4cc5-9952-43e0e0cba628",
-      "name": "Telegram Message"
+      "parameters": {
+        "jsCode": "// Recorremos todos los elementos de entrada\nreturn items.map(item => {\n  // Accedemos directamente al objeto cotizacion_json que viene del nodo anterior\n  const cot = item.json.cotizacion_json;\n\n  // Validamos que el objeto exista para evitar errores\n  if (!cot) {\n    return { json: { error: \"No se encontró el objeto cotizacion_json\" } };\n  }\n\n  // 1. Formateamos los arreglos (arrays) para que sean listas con viñetas\n  const alcanceTexto = cot.alcance.map(line => `• ${line}`).join('\\n');\n  const entregablesTexto = cot.entregables.map(line => `• ${line}`).join('\\n');\n\n  // 2. Generamos un ID de cotización aleatorio\n  const quoteId = Math.floor(Math.random() * 9000) + 1000;\n\n  // 3. Construimos el mensaje final\n  // Nota: Ya no usamos .monto porque el string ya incluye el símbolo y la moneda\n  const mensaje = `📄 *Cotización #${quoteId}*\n*Versión:* ${cot.version}\n\n*OBJETIVO:*\n${cot.objetivo}\n\n*ALCANCE:*\n${alcanceTexto}\n\n*ENTREGABLES:*\n${entregablesTexto}\n\n*INVERSIÓN:*\n• *Implementación:* ${cot.inversion.implementacion}\n• *Servicio Mensual:* ${cot.inversion.recurrente_mensual}\n\n✍️ *Responde directamente con:*\n• \"Aprobado\"\n• O escribe tus correcciones`;\n\n  return {\n    json: {\n      mensaje_final: mensaje,\n      metadata: {\n        version: cot.version,\n        id_referencia: quoteId,\n        estado: cot.estado\n      }\n    }\n  };\n});"
+      }
     },
     {
+      "id": "c07eb538-fa1c-40d3-9572-7f284e0ca7e9",
+      "name": "Is Topic?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3248,
+        -544
+      ],
       "parameters": {
         "conditions": {
           "options": {
@@ -2088,31 +2098,22 @@
           "combinator": "and"
         },
         "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        3248,
-        -544
-      ],
-      "id": "c07eb538-fa1c-40d3-9572-7f284e0ca7e9",
-      "name": "Is Topic?"
+      }
     },
     {
-      "parameters": {
-        "jsCode": "// Accedemos al mensaje principal\nconst msg = $('Obtener respuestas del admin').first().json.message;\n\n// La ruta correcta llega hasta 'reply_to_message'\nconst textoCompleto = msg.reply_to_message?.forum_topic_created?.name;\n\nif (!textoCompleto) {\n  return { error: \"No se encontró el nombre del tópico en la respuesta\" };\n}\n\n// Busca el patrón: una Q seguida de números y guiones\nconst regex = /Q-[\\d-]+/; \nconst coincidencia = textoCompleto.match(regex);\n\nreturn {\n  // Usamos [0] para obtener la primera coincidencia del array\n  quoteId: coincidencia ? coincidencia[0] : null\n};"
-      },
+      "id": "e89ca06a-6cd6-4ac0-9d9d-75c813d57edb",
+      "name": "Indetify Quote ID",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         3488,
         -560
       ],
-      "id": "e89ca06a-6cd6-4ac0-9d9d-75c813d57edb",
-      "name": "Indetify Quote ID"
+      "parameters": {
+        "jsCode": "// Accedemos al mensaje principal\nconst msg = $('Obtener respuestas del admin').first().json.message;\n\n// La ruta correcta llega hasta 'reply_to_message'\nconst textoCompleto = msg.reply_to_message?.forum_topic_created?.name;\n\nif (!textoCompleto) {\n  return { error: \"No se encontró el nombre del tópico en la respuesta\" };\n}\n\n// Busca el patrón: una Q seguida de números y guiones\nconst regex = /Q-[\\d-]+/; \nconst coincidencia = textoCompleto.match(regex);\n\nreturn {\n  // Usamos [0] para obtener la primera coincidencia del array\n  quoteId: coincidencia ? coincidencia[0] : null\n};"
+      }
     }
   ],
-  "pinData": {},
   "connections": {
     "Webhook": {
       "main": [
@@ -2523,22 +2524,10 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "4f1193d3-c331-4ce7-aa8a-4014c83cae6b",
-  "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "bd844ac2e0a78e956255434541fd9b4d40ba8bc05a0b4283f549857ad36d77c2"
-  },
-  "id": "uKBtNtb5i7AY0Pnl",
-  "tags": [
-    {
-      "updatedAt": "2026-01-14T06:55:44.214Z",
-      "createdAt": "2026-01-10T08:37:19.654Z",
-      "id": "CM1zdpWfs02ZkgbH",
-      "name": "v1.0.0"
-    }
-  ]
+  "pinData": null,
+  "staticData": null,
+  "tags": []
 }

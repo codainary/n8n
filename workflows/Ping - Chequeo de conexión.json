@@ -1,0 +1,62 @@
+{
+  "id": "Il6UPyycxQ76cfip",
+  "name": "Ping - Chequeo de conexión",
+  "active": true,
+  "nodes": [
+    {
+      "id": "ping-webhook",
+      "name": "Webhook Ping",
+      "webhookId": "7d3f2a10-5c1e-4b8a-9f2d-ping00000001",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "ping",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "ping-respond",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok', instance: 'n8n.automaverso.com', serverTime: $now.toISO(), timezone: $now.zoneName, executionId: $execution.id, workflowId: $workflow.id }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Ping": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "executionOrder": "v1"
+  },
+  "pinData": null,
+  "staticData": null,
+  "tags": []
+}
