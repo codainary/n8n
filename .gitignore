@@ -30,3 +30,5 @@ Thumbs.db
 *.log
 logs/
 tmp/
+# Backups de base de datos
+backups/

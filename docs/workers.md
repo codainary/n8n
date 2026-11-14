@@ -51,7 +51,7 @@ environment:
   - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD}
   
   # Configuración del worker
-  - QUEUE_WORKER_TIMEOUT=60              # Timeout por job
+  - N8N_GRACEFUL_SHUTDOWN_TIMEOUT=60              # Espera al apagar
   - N8N_CONCURRENCY_PRODUCTION_LIMIT=10  # Jobs simultáneos
   
   # Health check
@@ -63,7 +63,7 @@ environment:
 | Parámetro | Descripción | Default | Rango |
 |-----------|-------------|---------|-------|
 | `N8N_CONCURRENCY_PRODUCTION_LIMIT` | Workflows simultáneos por worker | 10 | 1-50 |
-| `QUEUE_WORKER_TIMEOUT` | Tiempo máximo por job (segundos) | 60 | 30-3600 |
+| `N8N_GRACEFUL_SHUTDOWN_TIMEOUT` | Espera máxima al apagar el worker (segundos) | 60 | 30-3600 |
 | `QUEUE_HEALTH_CHECK_ACTIVE` | Verificación de salud | true | true/false |
 
 ## Escalar Workers
@@ -84,33 +84,20 @@ Editar `docker-compose.yml`:
 
 ```yaml
   n8n-worker-3:
-    image: n8nio/n8n:1.70.0
+    <<: *worker
     container_name: n8n-worker-3
-    restart: always
-    command: worker
+
+  n8n-worker-3-runner:
+    <<: *runner
+    container_name: n8n-worker-3-runner
     environment:
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
-      - DB_POSTGRESDB_USER=${POSTGRES_USER}
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
-      - EXECUTIONS_MODE=queue
-      - QUEUE_BULL_REDIS_HOST=redis
-      - QUEUE_BULL_REDIS_PORT=6379
-      - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      - GENERIC_TIMEZONE=${TIMEZONE}
-      - TZ=${TIMEZONE}
-    volumes:
-      - n8n_data:/home/node/.n8n
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n-worker-3:5679
     depends_on:
-      - postgres
-      - redis
-      - n8n
-    networks:
-      - n8n-network
+      - n8n-worker-3
 ```
+
+> En n8n 2.x cada worker necesita su propio task runner (`n8nio/runners`, misma versión que `n8nio/n8n`) para ejecutar nodos Code. Las anclas `*worker` y `*runner` ya traen toda la configuración común.
 
 ## Monitorear Workers
 
@@ -157,14 +144,14 @@ docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 
 ```yaml
 - N8N_CONCURRENCY_PRODUCTION_LIMIT=20  # Más concurrencia
-- QUEUE_WORKER_TIMEOUT=30              # Timeout corto
+- N8N_GRACEFUL_SHUTDOWN_TIMEOUT=30              # Apagado rápido
 ```
 
 ### Para Workflows Pesados (archivos, ML, scraping)
 
 ```yaml
 - N8N_CONCURRENCY_PRODUCTION_LIMIT=5   # Menos concurrencia
-- QUEUE_WORKER_TIMEOUT=300             # Timeout largo (5 min)
+- N8N_GRACEFUL_SHUTDOWN_TIMEOUT=300             # Apagado lento (5 min)
 ```
 
 ### Para Alto Volumen

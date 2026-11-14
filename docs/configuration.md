@@ -68,7 +68,7 @@ environment:
 
 ```yaml
 environment:
-  - QUEUE_WORKER_TIMEOUT=60              # Timeout por job (segundos)
+  - N8N_GRACEFUL_SHUTDOWN_TIMEOUT=60              # Espera al apagar (segundos)
   - N8N_CONCURRENCY_PRODUCTION_LIMIT=10  # Workflows simultáneos
 ```
 

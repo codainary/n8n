@@ -1,3 +1,90 @@
+# ==========================================
+# n8n 2.x en modo Queue
+# main (UI + webhooks) + 2 workers + task runners externos
+# PostgreSQL (DB) + Redis (cola)
+# ==========================================
+
+x-n8n-image: &n8n-image n8nio/n8n:2.47.7
+x-runners-image: &runners-image n8nio/runners:2.47.7
+
+# Variables comunes a main y workers
+x-n8n-env: &n8n-env
+  # Database
+  DB_TYPE: postgresdb
+  DB_POSTGRESDB_HOST: postgres
+  DB_POSTGRESDB_PORT: 5432
+  DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+  DB_POSTGRESDB_USER: ${POSTGRES_USER}
+  DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+
+  # Redis Queue
+  EXECUTIONS_MODE: queue
+  QUEUE_BULL_REDIS_HOST: redis
+  QUEUE_BULL_REDIS_PORT: 6379
+  QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
+  QUEUE_HEALTH_CHECK_ACTIVE: "true"
+  # Ejecuciones manuales del editor también van a los workers
+  OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS: "true"
+
+  # Task runners (modo externo, sidecar n8nio/runners)
+  N8N_RUNNERS_MODE: external
+  N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+  N8N_RUNNERS_BROKER_LISTEN_ADDRESS: 0.0.0.0
+  N8N_NATIVE_PYTHON_RUNNER: "true"
+
+  # Binary data (en queue mode se comparte vía DB)
+  N8N_DEFAULT_BINARY_DATA_MODE: database
+
+  # Security
+  N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+  N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+
+  # Timezone
+  GENERIC_TIMEZONE: ${TIMEZONE}
+  TZ: ${TIMEZONE}
+
+  # Logging
+  N8N_LOG_LEVEL: info
+
+# Configuración común de runners
+x-runner: &runner
+  image: *runners-image
+  restart: always
+  networks:
+    - n8n-network
+  deploy:
+    resources:
+      limits:
+        cpus: '0.5'
+        memory: 512M
+
+# Configuración común de workers
+x-worker: &worker
+  image: *n8n-image
+  restart: always
+  command: worker
+  environment:
+    <<: *n8n-env
+    N8N_GRACEFUL_SHUTDOWN_TIMEOUT: 60
+    N8N_CONCURRENCY_PRODUCTION_LIMIT: 10
+  volumes:
+    - n8n_data:/home/node/.n8n
+    - ./n8n/nodes:/home/node/.n8n/nodes
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    n8n:
+      condition: service_healthy
+  networks:
+    - n8n-network
+  deploy:
+    resources:
+      limits:
+        cpus: '1'
+        memory: 1G
+
 services:
   # ==========================================
   # PostgreSQL Database
@@ -41,56 +128,32 @@ services:
       - n8n-network
 
   # ==========================================
-  # n8n Main Instance (Webhooks & UI)
+  # n8n Main Instance (UI, API, Webhooks, MCP)
   # ==========================================
   n8n:
-    image: n8nio/n8n:1.123.30
+    image: *n8n-image
     container_name: n8n-main
     restart: always
     ports:
       - "127.0.0.1:5678:5678"
     environment:
-      # Database Configuration
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
-      - DB_POSTGRESDB_USER=${POSTGRES_USER}
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
-      
-      # Redis Queue Configuration
-      - EXECUTIONS_MODE=queue
-      - QUEUE_BULL_REDIS_HOST=redis
-      - QUEUE_BULL_REDIS_PORT=6379
-      - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD}
-      - QUEUE_HEALTH_CHECK_ACTIVE=true
-      
-      # Security
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      
-      # General Configuration
-      - N8N_HOST=${N8N_HOST}
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - WEBHOOK_URL=${WEBHOOK_URL}
-      - N8N_EDITOR_BASE_URL=${WEBHOOK_URL}
-      
-      # Timezone
-      - GENERIC_TIMEZONE=${TIMEZONE}
-      - TZ=${TIMEZONE}
-      
-      # Logging & Metrics
-      - N8N_LOG_LEVEL=info
-      - N8N_METRICS=true
-      - N8N_METRICS_PREFIX=n8n_
-      
-      # Performance
-      - N8N_PAYLOAD_SIZE_MAX=16
-      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
-      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
-      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
-      - EXECUTIONS_DATA_PRUNE=true
-      - EXECUTIONS_DATA_MAX_AGE=168
+      <<: *n8n-env
+      N8N_HOST: ${N8N_HOST}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: ${WEBHOOK_URL}
+      N8N_EDITOR_BASE_URL: ${WEBHOOK_URL}
+      N8N_USER_MANAGEMENT_JWT_DURATION_HOURS: ${N8N_USER_MANAGEMENT_JWT_DURATION_HOURS}
+      # Metrics
+      N8N_METRICS: "true"
+      N8N_METRICS_PREFIX: n8n_
+      # Performance / retención
+      N8N_PAYLOAD_SIZE_MAX: 16
+      EXECUTIONS_DATA_SAVE_ON_ERROR: all
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: "true"
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: 168
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/nodes:/home/node/.n8n/nodes
@@ -104,7 +167,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 60s
     networks:
       - n8n-network
     deploy:
@@ -113,139 +176,43 @@ services:
           cpus: '1'
           memory: 1G
 
+  n8n-runner:
+    <<: *runner
+    container_name: n8n-runner
+    environment:
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
+    depends_on:
+      - n8n
+
   # ==========================================
-  # n8n Worker 1
+  # n8n Workers + sus task runners
   # ==========================================
   n8n-worker-1:
-    image: n8nio/n8n:1.123.30
+    <<: *worker
     container_name: n8n-worker-1
-    restart: always
-    command: worker
-    environment:
-      # Database Configuration
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
-      - DB_POSTGRESDB_USER=${POSTGRES_USER}
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
-      
-      # Redis Queue Configuration
-      - EXECUTIONS_MODE=queue
-      - QUEUE_BULL_REDIS_HOST=redis
-      - QUEUE_BULL_REDIS_PORT=6379
-      - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD}
-      - QUEUE_HEALTH_CHECK_ACTIVE=true
-      
-      # Worker Configuration
-      - QUEUE_WORKER_TIMEOUT=60
-      - N8N_CONCURRENCY_PRODUCTION_LIMIT=10
-      
-      # Security
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      
-      # Timezone
-      - GENERIC_TIMEZONE=${TIMEZONE}
-      - TZ=${TIMEZONE}
-      
-      # Logging
-      - N8N_LOG_LEVEL=info
-    volumes:
-      - n8n_data:/home/node/.n8n
-      - ./n8n/nodes:/home/node/.n8n/nodes
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      n8n:
-        condition: service_healthy
-    networks:
-      - n8n-network
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
 
-  # ==========================================
-  # n8n Worker 2
-  # ==========================================
+  n8n-worker-1-runner:
+    <<: *runner
+    container_name: n8n-worker-1-runner
+    environment:
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n-worker-1:5679
+    depends_on:
+      - n8n-worker-1
+
   n8n-worker-2:
-    image: n8nio/n8n:1.123.30
+    <<: *worker
     container_name: n8n-worker-2
-    restart: always
-    command: worker
-    environment:
-      # Database Configuration
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
-      - DB_POSTGRESDB_USER=${POSTGRES_USER}
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
-      
-      # Redis Queue Configuration
-      - EXECUTIONS_MODE=queue
-      - QUEUE_BULL_REDIS_HOST=redis
-      - QUEUE_BULL_REDIS_PORT=6379
-      - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD}
-      - QUEUE_HEALTH_CHECK_ACTIVE=true
-      
-      # Worker Configuration
-      - QUEUE_WORKER_TIMEOUT=60
-      - N8N_CONCURRENCY_PRODUCTION_LIMIT=10
-      
-      # Security
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      
-      # Timezone
-      - GENERIC_TIMEZONE=${TIMEZONE}
-      - TZ=${TIMEZONE}
-      
-      # Logging
-      - N8N_LOG_LEVEL=info
-    volumes:
-      - n8n_data:/home/node/.n8n
-      - ./n8n/nodes:/home/node/.n8n/nodes
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      n8n:
-        condition: service_healthy
-    networks:
-      - n8n-network
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
 
-  # ==========================================
-  # PostgreSQL with pgvector for AI/Embeddings
-  # ==========================================
-  postgres-vector:
-    image: pgvector/pgvector:pg16
-    container_name: n8n-postgres-vector
-    restart: always
-    ports:
-      - "5433:5432"
+  n8n-worker-2-runner:
+    <<: *runner
+    container_name: n8n-worker-2-runner
     environment:
-      - POSTGRES_USER=vector_user
-      - POSTGRES_PASSWORD=vector_password
-      - POSTGRES_DB=vector_db
-    volumes:
-      - ./postgres_data:/var/lib/postgresql/data
-      - ./init-db:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vector_user -d vector_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - n8n-network
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN}
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n-worker-2:5679
+    depends_on:
+      - n8n-worker-2
 
 # ==========================================
 # Volumes

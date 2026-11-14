@@ -158,7 +158,7 @@ docker exec n8n-postgres pg_dump -U n8n_user n8n_db > backup_pre_update.sql
 
 2. **Cambiar versión en docker-compose.yml:**
 ```yaml
-image: n8nio/n8n:1.71.0  # Nueva versión
+image: n8nio/n8n:2.48.0  # Nueva versión
 ```
 
 3. **Actualizar:**
@@ -177,7 +177,7 @@ docker compose logs n8n --tail 20
 
 ```powershell
 # Cambiar versión anterior en docker-compose.yml
-# image: n8nio/n8n:1.70.0
+# image: n8nio/n8n:2.47.7
 
 docker compose up -d
 

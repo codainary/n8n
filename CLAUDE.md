@@ -1,0 +1,60 @@
+# n8n — entorno de trabajo
+
+Instancia self-hosted de **n8n 2.47.7** en Docker, modo **queue**. Desde aquí se diseñan, validan, despliegan y versionan workflows.
+
+## Arquitectura (docker-compose.yml)
+
+| Servicio | Rol |
+|---|---|
+| `n8n-main` | UI, API pública, webhooks, MCP nativo — http://localhost:5678 |
+| `n8n-worker-1/2` | Ejecutan los jobs de la cola (concurrencia 10 c/u) |
+| `n8n-runner`, `n8n-worker-N-runner` | Task runners externos (`n8nio/runners`) para nodos Code JS/Python |
+| `n8n-postgres` | Base de datos de n8n (volumen `postgres_data`) |
+| `n8n-redis` | Cola Bull |
+
+- `OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true`: también las ejecuciones manuales del editor van a los workers.
+- Binary data en modo `database` (compartido entre main y workers).
+- Las imágenes `n8nio/n8n` y `n8nio/runners` deben tener **siempre la misma versión** (anclas `x-n8n-image` / `x-runners-image`).
+
+## Herramientas disponibles
+
+- **MCP `n8n-mcp`** (alcance local, la API key vive en `~/.claude.json`, no en el repo): documentación de nodos, validación y CRUD de workflows contra la instancia.
+- **MCP nativo de n8n** (`n8n-native`, si está configurado): ejecutar/buscar workflows expuestos desde Settings > Instance-level MCP.
+- **Plugin `n8n-mcp-skills`**: skills de patrones, expresiones, nodos Code, validación, agentes IA, sub-workflows, manejo de errores.
+- **`scripts/n8n-sync.mjs`**: sincroniza workflows entre n8n y `workflows/`.
+
+## Flujo de trabajo
+
+1. Buscar nodos y patrones con `n8n-mcp` y las skills antes de construir.
+2. Construir/editar el workflow (vía `n8n-mcp` o `push` desde `workflows/`).
+3. **Validar** con las herramientas de validación de `n8n-mcp` antes de desplegar.
+4. Probar (ejecución manual o webhook de test `/webhook-test/...`).
+5. **Publicar** — en n8n 2.x guardar NO pone en producción; hay que publicar.
+6. `node scripts/n8n-sync.mjs pull` y commitear los JSON en `workflows/`.
+
+## Comandos
+
+```bash
+docker compose up -d                 # levantar
+docker compose ps                    # estado
+docker compose logs -f n8n           # logs del main (o n8n-worker-1, n8n-worker-1-runner…)
+node scripts/n8n-sync.mjs list       # workflows en n8n
+node scripts/n8n-sync.mjs pull       # n8n -> workflows/*.json
+node scripts/n8n-sync.mjs push [f]   # workflows/*.json -> n8n (crea o actualiza por id)
+```
+
+Backup de la base antes de cualquier upgrade:
+```bash
+set -a; . ./.env; set +a
+docker exec n8n-postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc > backups/n8n_db_$(date +%Y%m%d-%H%M).dump
+```
+
+## Reglas
+
+- **Nunca** cambiar `N8N_ENCRYPTION_KEY`: se pierden todas las credenciales guardadas.
+- **Nunca** commitear `.env`, `backups/` ni API keys. Las credenciales de n8n no se exportan en los JSON (solo referencias por id); al importar en otra instancia hay que re-vincularlas.
+- No hacer downgrade de versión sin restaurar el backup: las migraciones de DB no son reversibles.
+- Para borrar un workflow vía API primero hay que despublicarlo (`POST /workflows/{id}/deactivate`).
+- En nodos Code, `$env` está bloqueado por defecto (`N8N_BLOCK_ENV_ACCESS_IN_NODE=true`); usar credenciales o variables de n8n.
+- Python en nodos Code usa el runner nativo (`language: pythonNative`, datos en `_items`).
+- `WEBHOOK_URL` está en `http://localhost:5678/`; para webhooks externos (WhatsApp, Telegram) cambiarlo a la URL pública del túnel y reiniciar `n8n`.

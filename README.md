@@ -46,9 +46,11 @@ Configuración de n8n en modo **Queue** con balanceo de carga usando workers.
 # Copiar archivo de ejemplo
 Copy-Item .env.example .env
 
-# Editar con tus valores (opcional, ya viene preconfigurado)
+# Editar con tus valores
 notepad .env
 ```
+
+> **Obligatorio en n8n 2.x:** completa `N8N_RUNNERS_AUTH_TOKEN` (genera uno con `openssl rand -hex 32`); sin él los task runners no se conectan y los nodos Code fallan. `N8N_API_KEY` se crea después en *Settings > n8n API*.
 
 ### 2. Iniciar todos los servicios
 
@@ -136,7 +138,7 @@ docker exec -it n8n-redis redis-cli -a R3d1s_Secure_P@ss_2024! MONITOR
 | Variable | Descripción | Default |
 |----------|-------------|---------|
 | `N8N_CONCURRENCY_PRODUCTION_LIMIT` | Workflows simultáneos por worker | 10 |
-| `QUEUE_WORKER_TIMEOUT` | Timeout en segundos | 60 |
+| `N8N_GRACEFUL_SHUTDOWN_TIMEOUT` | Espera máxima al apagar el worker (s) | 60 |
 | `QUEUE_HEALTH_CHECK_ACTIVE` | Health check activo | true |
 
 ### Ajustar concurrencia
