@@ -35,7 +35,7 @@ Canal: WhatsApp Business Platform (API oficial de Meta, Cloud API). Número actu
 │   → FILTRO DE ENTRADA (Guardrails: jailbreak · groserías/NSFW · tema)  ─ bloquea → rechazo │
 │   → AI Agent (gpt-4.1-mini) ── herramienta consultar_base_conocimiento ─► TOOL · Consultar │
 │   → FILTRO DE SALIDA (Guardrails: claves/tokens · fuga de configuración) ─ bloquea → seguro│
-│   → espejo: si el último mensaje fue audio → ElevenLabs (voz Sofía) ; si no → texto        │
+│   → espejo: si el último mensaje fue audio → ElevenLabs (voz femenina) ; si no → texto        │
 │   → Graph API → register_outbound (wamid) → finish_batch → ¿llegaron más? → se re-invoca   │
 └───────────────────────────────────────────────────────────────────────────────────────────┘
    WA · 4 Mantenimiento (cada 5 min): cierra ventanas de 24 h, reintenta ráfagas atascadas.
@@ -152,7 +152,7 @@ cambian poco.
 - **top-k = 5** por namespace, **umbral 0.35** de similitud coseno (relacionadas 0.40–0.65; fuera de tema ≈ 0.10).
   El nombre «Automaverso» se elimina de la consulta antes del embedding (sesgaba hacia secciones genéricas).
 - Sin resultados ⇒ `SIN_INFORMACION` ⇒ el agente responde la frase definida:
-  *«No tengo esa información en este momento. Puedes escribirnos a hello@automaverso.com o agendar una asesoría gratis en automaverso.com y el equipo te responde.»*
+  *«No tengo esa información por ahora. Escríbenos a hello@automaverso.com o agenda una asesoría gratis en automaverso.com y el equipo te responde.»*
   Si hay fragmentos pero no responden la pregunta, el agente decide igual (verificado en pruebas).
 - Las respuestas citan el documento cuando aplica («Según nuestra Política de privacidad…»).
 - Texto y audio usan el mismo camino: el audio llega transcrito (`[Nota de voz] …`) y la respuesta sale por ElevenLabs.
@@ -161,6 +161,25 @@ cambian poco.
 que devuelve `{ response: string }`. Para conectarla: publicarla y añadir un nodo «Call n8n Sub-Workflow
 Tool» al agente de `WA · 2` (nombre `snake_case` + descripción que diga **cuándo** usarla). El agente y el
 resto del flujo no se reescriben. El system prompt vive en `scripts/phase2-agent.mjs` (versionado).
+
+### Saludo inicial con botones y estilo de mensajes
+
+- El bot se llama **Anita** (`BOT_NAME` en `scripts/phase2-agent.mjs`). No usa el nombre del perfil de WhatsApp del cliente (suele traer apodos o emojis).
+- **Primer mensaje de cada conversación** (`is_first` = la conversación vigente aún no tiene salientes; una
+  conversación nueva empieza tras 24 h sin mensajes del usuario) ⇒ la respuesta se envía como mensaje
+  **interactivo** con 3 botones: *Diagnóstico gratis*, *Ver ejemplos*, *Hablar con un asesor* (Meta limita
+  el título a 20 caracteres). Va siempre como texto, aunque el usuario haya enviado una nota de voz.
+  - Si el usuario solo saludó (lista de palabras de saludo, ≤ 60 caracteres) ⇒ saludo **fijo** sin LLM
+    (nodo «Saludo inicial»).
+  - Si ya preguntó algo ⇒ el agente se presenta, responde breve y el mensaje sale con los botones.
+  - Se registra como `msg_type = 'interactive'`; el `agent_text` incluye `[Botones: …]` para el contexto.
+- Al pulsar un botón llega su título como texto (ingesta ya mapea `button_reply`/`list_reply`) y el
+  system prompt define qué responder a cada uno.
+- **Estilo** (todas las respuestas): formato de WhatsApp (`*negrita*`, `_cursiva_`, viñetas «•»), ≤ ~60
+  palabras en 2–3 bloques, emojis casi nunca. «Respuesta del agente» normaliza markdown que el modelo
+  cuele (`**x**`, `#`, `[x](url)`); la voz elimina símbolos de formato y emojis antes de ElevenLabs.
+- Gotcha n8n: dentro de una expresión `{{ }}` no puede aparecer `}}` (p. ej. JSON compacto); usar
+  literales con espacios.
 
 ---
 
