@@ -131,6 +131,10 @@ caracteres (~800 tokens) con 400 de solapamiento, cortando por párrafos.
 | `KB · 1 Sincronizar Drive` | cada 10 min + manual | reconciliación Drive ↔ `kb.files` → plan → procesar |
 | `KB · 2 Procesar archivo` | sub-workflow | exportar → fragmentar → embeddings → Pinecone → registro |
 | `TOOL · Consultar base de conocimiento` | herramienta del agente | top-k por namespace, umbral, fuentes, log |
+| `EX · 1 Sincronizar ejemplos` | cada hora + manual | videos de Drive + catálogo → sube a Meta → `chatbot.examples` |
+| `TOOL · Enviar ejemplo` | herramienta del agente + botón | siguiente video no visto + botones *Ver otro ejemplo* / *Hablar con un asesor* |
+| `FLOW · Contacto con asesor` | botón + herramienta del agente | pide nombre y medio de contacto → Sheet de leads → aviso en Telegram |
+| `FLOW · Diagnóstico` | botón + herramienta del agente | diagnóstico gratis por WhatsApp (preguntas interactivas) → reporte → Sheet → Telegram |
 
 **Reindexación completa**: abrir `KB · 1` en n8n y ejecutar el disparador «Reindexar todo (manual)».
 
@@ -180,6 +184,28 @@ resto del flujo no se reescriben. El system prompt vive en `scripts/phase2-agent
   cuele (`**x**`, `#`, `[x](url)`); la voz elimina símbolos de formato y emojis antes de ElevenLabs.
 - Gotcha n8n: dentro de una expresión `{{ }}` no puede aparecer `}}` (p. ej. JSON compacto); usar
   literales con espacios.
+
+### Flujo «Ver ejemplos» (videos)
+
+**Dónde viven los videos**: carpeta de Drive **«Automaverso - Ejemplos del bot (videos)»** (id en
+`chatbot.app_config.examples_folder_id`, compartida como lector con la cuenta de servicio `n8n-kb`), con el
+Sheet **«_Catálogo de ejemplos»**: `archivo | titulo | descripcion | tema | activo | orden`.
+Para agregar un video: subirlo a la carpeta (**MP4 H.264/AAC, < 16 MB**, idealmente 30–90 s, vertical 720×1280)
+y añadir su fila con `activo = sí`. En ≤ 1 h `EX · 1` lo sube a Meta (o ejecutar «Sincronizar ahora»).
+
+- Un enlace de Drive no sirve para WhatsApp (no es descarga directa), por eso `EX · 1` sube cada video a
+  Meta una vez y guarda el `media_id` (vence a los 30 días; se renueva a los 25). Enviar = instantáneo.
+- Estado: `SELECT * FROM chatbot.v_examples;` (listo, tamaño, errores, veces enviado).
+- **Disparadores**: botón *Ver ejemplos* / *Ver otro ejemplo* (o escribir exactamente eso) ⇒ enrutador
+  fijo en WA · 2 → `TOOL · Enviar ejemplo` (sin LLM). Pedido libre («¿tienen casos?», en cualquier momento)
+  ⇒ el agente usa la herramienta `enviar_ejemplo` con `tema` si conoce la industria del cliente y responde
+  `[EJEMPLO_ENVIADO]`, que WA · 2 descarta (no se manda texto extra).
+- `chatbot.next_example`: siguiente video **no visto** por ese número (`chatbot.example_views`),
+  priorizando coincidencias del `tema` con tema/título/descripción; luego `orden`.
+- Tras el video: botones *Ver otro ejemplo* + *Hablar con un asesor*; si era el último, solo el segundo.
+  Si ya vio todos: aviso + botón *Hablar con un asesor*. *Hablar con un asesor* sigue respondiéndolo el
+  agente (correo + asesoría) hasta que exista el flujo de asesor.
+- Si Meta rechaza un `media_id`, se invalida (`example_media_invalid`) y `EX · 1` lo vuelve a subir.
 
 ---
 
@@ -288,3 +314,50 @@ Corrección aplicada (2026-11-15): cuando no había cambios en Drive, `KB · 1` 
 elemento vacío, no se cerraba la ejecución y las 3 pasadas siguientes salían por «otra en curso»
 (68 de 75 corridas terminaron «abandonada (timeout)»). Ahora una rama `¿Sin cambios?` cierra la ejecución
 directamente; los cambios en Drive llegan a Pinecone en ≤ 10 min.
+
+### Flujo «Hablar con un asesor»
+
+- **Disparadores**: botón *Hablar con un asesor* (enrutador fijo en WA · 2) o pedirlo con texto libre en
+  cualquier momento (herramienta `solicitar_asesor` del agente, siempre, aunque ya lo haya pedido antes).
+- **Pasos** (`chatbot.handoff_step`, tabla `chatbot.handoffs`, respuestas fijas sin LLM):
+  nombre → botones *Escríbanme por aquí* / *Llamada por WhatsApp* / *Llamada a mi celular* → si es celular:
+  *Sí, a este número* / *Otro número* (valida el número; 10 dígitos que empiezan por 3 ⇒ +57).
+  Mientras hay una solicitud activa, todo mensaje del usuario va al flujo (no al agente). *cancelar* la
+  detiene; 3 respuestas inválidas seguidas la cancelan; vence tras 2 h sin respuesta.
+- **Al completar** (`FLOW · Contacto con asesor`): confirma al usuario → resumen de la conversación
+  (gpt-4.1-mini) → hoja **Leads** del Sheet «Automaverso · Leads» (`leads_sheet_id`): busca a la persona por
+  los últimos 10 dígitos del teléfono; si existe actualiza solo *WhatsApp / teléfono*, *Medio de contacto*,
+  *Resumen*, *Actualizado* (y Nombre/Etapa si estaban vacíos); si no, crea `WA-yyyymmdd-NNNN` con Etapa
+  *Contacto solicitado* y Canal de entrada *WhatsApp*. Escribe por **nombre de columna** (ver `docs/leads-sheet.md`).
+- **Telegram** (bot @automaversosas_bot, grupo `telegram_leads_chat_id`): nombre, medio preferido, teléfono,
+  diagnóstico (✅ si la fila tiene *Diagnóstico ID*), resumen y botones *Abrir chat de WhatsApp* (wa.me) y
+  *Ver en el Sheet*. Resultado en `chatbot.handoffs` (lead_id, sheet_row, telegram_message_id, notify_error).
+- Credenciales n8n: `Google Sheets Leads (cuenta de servicio n8n-kb)` (scope spreadsheets; la cuenta de
+  servicio es editora solo de ese Sheet) y `Telegram Leads (automaversosas_bot)`.
+
+### Flujo «Diagnóstico gratis» (por WhatsApp; ya no se envía al usuario al website)
+
+- **Réplica del diagnóstico del website** (`automaverso-web`): mismas preguntas y opciones
+  (`lib/assessment/options.ts`, `screens.ts`), misma fórmula **v2** (`lib/assessment/report.ts`), misma
+  calificación interna **v2** (`server/services/qualification.ts`) y sugerencias (`suggestions.ts`).
+  Verificado: con las mismas respuestas da exactamente las mismas horas y el mismo ahorro que la web.
+  **Si cambian en el website, actualizar** `sql/007_diagnosis.sql` (catálogo `chatbot.diag_questions`) y
+  `scripts/diagnosis-workflow.mjs` (nodo «Calcular diagnóstico»).
+- **Disparadores**: botón *Diagnóstico gratis* / escribir «diagnóstico» (enrutador fijo) o pedirlo con texto
+  libre (herramienta `iniciar_diagnostico`). Mientras está en curso, todo mensaje va al flujo (prioridad sobre
+  la solicitud de asesor). *cancelar* lo detiene; se retoma dentro de 24 h; 4 respuestas inválidas lo cancelan.
+- **Preguntas** (`chatbot.diagnosis_step`, tabla `chatbot.diagnoses`): ≤ 3 opciones = botones, más = lista;
+  selección múltiple (áreas, herramientas, «qué pasa cuando se atrasa») con *Agregar otra* / *Continuar*; la
+  tarea se elige de 3 ejemplos del área o se escribe; costo por hora en pesos si es Colombia; nombre solo si no lo
+  conocemos (de una solicitud de asesor o diagnóstico anterior); correo opcional con *Omitir*. Pie «Pregunta n de N».
+- **Resultado**: mensaje con horas y ahorro al año (COP si es Colombia), potencial, % automatizable, costo mensual,
+  semanas de recuperación del piloto, 3 sugerencias y efectos; luego botones *Hablar con un asesor* / *Ver ejemplos*.
+- **Sheet**: fila nueva en **Diagnósticos** (`DIAG-WA-yyyymmdd-NNNN`, Canal WhatsApp, respuestas con las etiquetas
+  del website, ahorro en US$, calificación) y en **Leads** crea/actualiza a la persona (Etapa *Diagnosticado*,
+  *Diagnóstico ID*). Ubica a la persona primero por el Lead ID que ya tiene ese WhatsApp (`chatbot.known_lead_id`)
+  y luego por teléfono, para no duplicarla.
+- **Telegram**: aviso con calificación (✅ encaja / 🟡 dudoso / ⛔ no califica + puntos), resultado, respuestas
+  clave, enlace al chat y al Sheet. La calificación nunca se muestra al cliente.
+- La solicitud de asesor tampoco vuelve a pedir el nombre si ya lo conocemos.
+- **Herramientas que envían sus propios mensajes** (`enviar_ejemplo`, `solicitar_asesor`, `iniciar_diagnostico`):
+  WA · 2 descarta el texto del agente si alguna devolvió ENVIADO / SIN_MAS_EJEMPLOS (lee `intermediateSteps`).

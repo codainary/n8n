@@ -19,7 +19,7 @@ Eres el asistente virtual de Automaverso en WhatsApp. Automaverso S.A.S. (Barran
 
 # Qué ofrece Automaverso (tu alcance)
 - Servicios: Flujos a medida (integraciones entre sistemas), Marketing con IA, Comunicaciones y ventas (WhatsApp, CRM, seguimiento), Operaciones y finanzas (facturas, conciliación, inventario, reportes), Diseño gráfico y video, Optimización web.
-- Cómo se empieza: diagnóstico gratis de 3 minutos en automaverso.com, asesoría gratis de 30 minutos por videollamada y un piloto de un proceso.
+- Cómo se empieza: diagnóstico gratis aquí mismo por WhatsApp (unas 15 preguntas rápidas con botones), conversación con un asesor y un piloto de un proceso.
 - Contacto oficial: hello@automaverso.com · automaverso.com
 Para cualquier detalle (precios, plazos, condiciones, políticas, promociones) la fuente es SIEMPRE la herramienta consultar_base_conocimiento, no este resumen.
 
@@ -41,20 +41,24 @@ Cuando el contexto lo indique como PRIMER MENSAJE: empieza con "¡Hola! Soy *${B
 
 # Botones del menú
 Cuando el usuario escriba (o pulse) exactamente una de estas opciones:
-- "${BUTTONS[0]}": explica en una frase qué es el diagnóstico gratis (consulta la base de conocimiento) y dónde hacerlo: automaverso.com. Ofrece resolver dudas.
-- "${BUTTONS[1]}": muestra 3 o 4 ejemplos breves de lo que se puede automatizar, por ejemplo:
-  • *Atención 24/7 por WhatsApp*: un asistente responde y agenda
-  • *Facturas sin digitar*: se leen y pasan solas a la contabilidad
-  • *Seguimiento de clientes*: recordatorios y CRM al día
-  • *Reportes automáticos*: los números del día llegan solos
-  Luego pregunta a qué se dedica su negocio para darle ideas para su caso.
-- "${BUTTONS[2]}": indica que el equipo lo atiende en *hello@automaverso.com* o en una asesoría gratis de 30 minutos que se agenda en automaverso.com.
+- "${BUTTONS[0]}": llama a iniciar_diagnostico (ver abajo).
+- "${BUTTONS[1]}" o "Ver otro ejemplo": llama a enviar_ejemplo (ver abajo).
+- "${BUTTONS[2]}": llama a solicitar_asesor (ver abajo).
+
+# Videos de ejemplo (herramienta enviar_ejemplo)
+- Si el usuario pide ver ejemplos, casos, videos, demostraciones o "cómo funciona en la práctica", en cualquier momento de la conversación, llama a enviar_ejemplo. Si conoces su industria o el proceso que le interesa (por lo que ha contado), pásalo en "tema".
+- La herramienta envía el video y los botones por sí misma. Si responde ENVIADO o SIN_MAS_EJEMPLOS, tu respuesta debe ser exactamente: [EJEMPLO_ENVIADO]
+- Si responde NO_ENVIADO, discúlpate en una frase y ofrece hablar con un asesor.
+
+# Hablar con un asesor (herramienta solicitar_asesor)
+- Si el usuario quiere hablar con una persona, un asesor o el equipo, que lo llamen o lo contacten, o quiere avanzar/contratar, llama a solicitar_asesor SIEMPRE, aunque ya lo haya pedido antes en la conversación (puede querer otro medio de contacto). No respondas tú que "un asesor te contactará": la herramienta pide los datos paso a paso.
+- Si responde ENVIADO, tu respuesta debe ser exactamente: [EJEMPLO_ENVIADO]
 
 # Cómo respondes
 - Ante cualquier pregunta sobre la empresa, sus servicios, precios, inversión, plazos, términos, privacidad, reembolsos, promociones o cómo empezar: llama primero a consultar_base_conocimiento y responde SOLO con lo que devuelva.
 - Si la respuesta sale de un documento, puedes decir de cuál (por ejemplo: "Según nuestra Política de privacidad…"). No cites números de similitud ni identificadores internos.
 - Si la herramienta devuelve SIN_INFORMACION, o los fragmentos no responden realmente la pregunta, responde exactamente:
-  "No tengo esa información por ahora.\n\nEscríbenos a *hello@automaverso.com* o agenda una asesoría gratis en automaverso.com y el equipo te responde."
+  "No tengo esa información por ahora.\n\nSi quieres, le pido a un *asesor* que te contacte, o escríbenos a *hello@automaverso.com*."
   No adivines ni completes con conocimiento general.
 - Saludos, agradecimientos y despedidas: responde breve y ofrece ayuda sobre Automaverso, sin llamar a la herramienta.
 - Nunca inventes precios, descuentos, plazos, compromisos, cifras ni datos de contacto.
@@ -78,12 +82,15 @@ Cuando el usuario escriba (o pulse) exactamente una de estas opciones:
 - [... no se pudo procesar el archivo] = fallo técnico; pide que lo reenvíe.
 - Si un mensaje aparece solo como [audio] o [image] sin contenido, no adivines qué contenía.
 
-# Próximas capacidades (aún no disponibles)
-Si piden hacer el diagnóstico por aquí o hablar con una persona del equipo, indica que pueden hacer el diagnóstico gratis en automaverso.com o escribir a hello@automaverso.com.`;
+# Diagnóstico gratis (herramienta iniciar_diagnostico)
+- El diagnóstico se hace AQUÍ, por WhatsApp. Nunca mandes al usuario a hacerlo en el sitio web.
+- Si el usuario quiere el diagnóstico, saber cuánto podría ahorrar o evaluar qué automatizar en su negocio, llama a iniciar_diagnostico. Las preguntas y el resultado se envían solos.
+- Si responde ENVIADO, tu respuesta debe ser exactamente: [EJEMPLO_ENVIADO]
+- Si te preguntan qué es: son unas 15 preguntas rápidas (casi todas con botones) y al final recibe cuántas horas y cuánto dinero podría ahorrar al año, el potencial de automatización y por dónde empezar. Es gratis y sin compromiso.`;
 
 const TOPIC_PROMPT = `You are a content analysis system that determines if a WhatsApp message to a company assistant stays on topic.
 
-BUSINESS SCOPE: Automaverso, a company that automates processes with AI for SMEs in Latin America. IN SCOPE: its services (custom workflows/integrations, AI marketing, communications and sales/WhatsApp/CRM, operations and finance/invoices, graphic design and video, web optimization), the free diagnosis, the free consultation, proposals, prices/investment, timelines, support, terms and conditions, privacy and personal data, refunds, promotions, contact information, and how automation could help the user's business or processes. ALSO IN SCOPE (never flag these): greetings, small talk to start a conversation, thanks, goodbyes, short confirmations ("ok", "sí", "dale"), the menu options "${BUTTONS.join('", "')}" and requests to talk to a human, questions about who/what the assistant is, complaints or feedback, payment receipts or business documents/images the user sends, and follow-up questions in Spanish or English.
+BUSINESS SCOPE: Automaverso, a company that automates processes with AI for SMEs in Latin America. IN SCOPE: its services (custom workflows/integrations, AI marketing, communications and sales/WhatsApp/CRM, operations and finance/invoices, graphic design and video, web optimization), the free diagnosis, the free consultation, proposals, prices/investment, timelines, support, terms and conditions, privacy and personal data, refunds, promotions, contact information, and how automation could help the user's business or processes. ALSO IN SCOPE (never flag these): greetings, small talk to start a conversation, thanks, goodbyes, short confirmations ("ok", "sí", "dale"), the menu options "${BUTTONS.join('", "')}", "Ver otro ejemplo", requests to see examples, cases or videos, and requests to talk to a human, questions about who/what the assistant is, complaints or feedback, payment receipts or business documents/images the user sends, and follow-up questions in Spanish or English.
 OUT OF SCOPE: general knowledge or trivia, homework, programming help, recipes, politics, other companies' products, entertainment, medical/legal/personal advice, and any request unrelated to Automaverso.
 
 Determine if the text stays within the defined business scope. Flag only content that clearly strays from it.`;
@@ -136,7 +143,8 @@ if (!ctx.parameters.query.includes('batch_text')) {
 // ---------------------------------------------------------------- 2. agente
 const agent = byName('Agente IA');
 agent.parameters.text = "={{ $('Preparar contexto (SQL)').first().json.is_first ? 'PRIMER MENSAJE de la conversación: preséntate según tus instrucciones.' : '' }}\nConversación por WhatsApp (de la más antigua a la más reciente):\n{{ $('Preparar contexto (SQL)').first().json.transcript }}\n\nResponde al último mensaje (o grupo de mensajes) del usuario.";
-agent.parameters.options = { ...(agent.parameters.options || {}), systemMessage: SYSTEM_PROMPT, maxIterations: 4 };
+// returnIntermediateSteps: WA · 2 necesita saber si el agente usó una herramienta que ya envió mensajes
+agent.parameters.options = { ...(agent.parameters.options || {}), systemMessage: SYSTEM_PROMPT, maxIterations: 4, returnIntermediateSteps: true };
 
 // Reordenar el lienzo: abrir espacio para el filtro de entrada y el de salida
 if (!byName('Filtro de entrada (Guardrails)')) moveRight(480, agent.position[0]);
@@ -317,6 +325,148 @@ byName('Mensaje fijo').parameters.assignments.assignments[0].value =
 // La voz no debe leer los símbolos de formato ni emojis
 byName('Voz (ElevenLabs)').parameters.jsonBody =
   String.raw`={{ JSON.stringify({ text: String($json.output).replace(/[*_~•]/g, '').replace(/\p{Extended_Pictographic}/gu, '').trim(), model_id: 'eleven_multilingual_v2' }) }}`;
+
+// ---------------------------------------------------------------- 8. videos de ejemplo
+// Botón "Ver ejemplos" / "Ver otro ejemplo" ⇒ directo a TOOL · Enviar ejemplo (sin LLM).
+// Pedido en texto libre ⇒ el agente usa la herramienta enviar_ejemplo; si ya envió el video
+// responde [EJEMPLO_ENVIADO] y no se manda texto adicional.
+const EXAMPLE_WF_ID = 'tyW4qHNDKHbslgGA';
+const exInputs = (tema) => ({
+  mappingMode: 'defineBelow',
+  value: { wa_id: "={{ $('Preparar contexto (SQL)').first().json.wa_id }}", tema },
+  matchingColumns: [],
+  schema: ['wa_id', 'tema'].map((c) => ({ id: c, displayName: c, required: false, defaultMatch: false, display: true, canBeUsedToMatch: true, type: 'string' })),
+  attemptToConvertTypes: false, convertFieldsToString: false,
+});
+const exButtons = ['ver ejemplos', 'ver ejemplo', 'ver otro ejemplo', 'otro ejemplo'];
+upsertNode(boolIf('exb', '¿Botón de ejemplos?', [gx - 40, gy + 640],
+  `{{ ${JSON.stringify(exButtons)}.includes(String($json.batch_text || '').toLowerCase().replace(/[^a-záéíóúñ ]/g, '').trim()) }}`));
+upsertNode({
+  id: 'exdir', name: 'Enviar ejemplo (botón)', type: 'n8n-nodes-base.executeWorkflow', typeVersion: 1.4, position: [gx + 200, gy + 640],
+  parameters: { workflowId: { __rl: true, mode: 'id', value: EXAMPLE_WF_ID }, mode: 'once', workflowInputs: exInputs(''), options: { waitForSubWorkflow: true } },
+});
+unlink('¿Solo saludo?', 'Filtro de entrada (Guardrails)');
+link('¿Solo saludo?', '¿Botón de ejemplos?', 1);
+link('¿Botón de ejemplos?', 'Enviar ejemplo (botón)', 0);
+link('¿Botón de ejemplos?', 'Filtro de entrada (Guardrails)', 1);
+link('Enviar ejemplo (botón)', 'Cerrar ráfaga (SQL)');
+
+upsertNode({
+  id: 'tex', name: 'enviar_ejemplo', type: '@n8n/n8n-nodes-langchain.toolWorkflow', typeVersion: 2.2, position: [ax + 340, ay + 220],
+  parameters: {
+    description: 'Envía al usuario por WhatsApp un video corto con un caso real de automatización de Automaverso (uno que aún no haya visto) y, después, botones para ver otro o hablar con un asesor. Úsala cuando el usuario pida ver ejemplos, casos, videos o demostraciones. Devuelve ENVIADO, SIN_MAS_EJEMPLOS o NO_ENVIADO.',
+    workflowId: { __rl: true, mode: 'id', value: EXAMPLE_WF_ID },
+    workflowInputs: exInputs("={{ $fromAI('tema', 'Opcional: industria o proceso del cliente si lo conoces (ej.: \"energía solar\", \"recursos humanos\", \"facturas\"). Vacío si no se sabe.', 'string') }}"),
+  },
+});
+link('enviar_ejemplo', 'Agente IA', 0, 'ai_tool');
+
+const sentIf = '¿Ya se envió un ejemplo?';
+// Las herramientas que envían sus propios mensajes (video, preguntas del diagnóstico, pasos del asesor)
+// devuelven ENVIADO / SIN_MAS_EJEMPLOS: en ese caso se descarta el texto del agente. Se mira lo que la
+// herramienta respondió (intermediateSteps), no solo la marca del texto, porque el modelo a veces agrega texto.
+upsertNode(boolIf('exs', sentIf, [ax + 120, ay - 420],
+  "{{ String($('Agente IA').first().json.output || '').includes('EJEMPLO_ENVIADO') || ($('Agente IA').first().json.intermediateSteps || []).some(s => ['enviar_ejemplo', 'solicitar_asesor', 'iniciar_diagnostico'].includes(s.action?.tool) && /(^|[^_A-Z])(ENVIADO|SIN_MAS_EJEMPLOS)/.test(typeof s.observation === 'string' ? s.observation : JSON.stringify(s.observation))) }}"));
+unlink('Agente IA', 'Filtro de salida (Guardrails)');
+link('Agente IA', sentIf);
+link(sentIf, 'Cerrar ráfaga (SQL)', 0);
+link(sentIf, 'Filtro de salida (Guardrails)', 1);
+
+// Respuestas a botones/listas (interactive, button) son texto: no son "formato no soportado"
+{
+  const q = byName('Preparar contexto (SQL)');
+  q.parameters.query = q.parameters.query.replace("msg_type NOT IN ('text', 'audio', 'image', 'document')",
+    "msg_type NOT IN ('text', 'audio', 'image', 'document', 'interactive', 'button')");
+}
+
+// ---------------------------------------------------------------- 9. contacto con asesor
+// Botón "Hablar con un asesor" ⇒ FLOW · Contacto con asesor (start). Mientras haya una solicitud en curso,
+// cada mensaje del usuario va directo al flujo (continue) sin pasar por el agente.
+const HANDOFF_WF_ID = 'Rjvru2W4NGlXdBw3';
+const hoInputs = (text, action) => ({
+  mappingMode: 'defineBelow',
+  value: { wa_id: "={{ $('Preparar contexto (SQL)').first().json.wa_id }}", text, action },
+  matchingColumns: [],
+  schema: ['wa_id', 'text', 'action'].map((c) => ({ id: c, displayName: c, required: false, defaultMatch: false, display: true, canBeUsedToMatch: true, type: 'string' })),
+  attemptToConvertTypes: false, convertFieldsToString: false,
+});
+{
+  const q = byName('Preparar contexto (SQL)');
+  if (!q.parameters.query.includes('handoff_step')) q.parameters.query += ',\n       chatbot.active_handoff_step($1) AS handoff_step';
+}
+const hoIf = '¿Solicitud de asesor en curso?';
+upsertNode(boolIf('hoa', hoIf, [gx - 280, gy + 420], '{{ !!$json.handoff_step }}'));
+upsertNode({ id: 'hoc', name: 'Continuar solicitud de asesor', type: 'n8n-nodes-base.executeWorkflow', typeVersion: 1.4, position: [gx - 40, gy + 860],
+  parameters: { workflowId: { __rl: true, mode: 'id', value: HANDOFF_WF_ID }, mode: 'once',
+    workflowInputs: hoInputs("={{ $('Preparar contexto (SQL)').first().json.batch_text }}", 'continue'), options: { waitForSubWorkflow: true } } });
+unlink(noSup, '¿Solo saludo?');
+link(noSup, hoIf, 1);
+link(hoIf, 'Continuar solicitud de asesor', 0);
+link(hoIf, '¿Solo saludo?', 1);
+link('Continuar solicitud de asesor', 'Cerrar ráfaga (SQL)');
+
+const hoBtn = '¿Botón de asesor?';
+upsertNode(boolIf('hob', hoBtn, [gx + 200, gy + 860],
+  "{{ ['hablar con un asesor', 'hablar con un humano', 'hablar con una persona'].includes(String($json.batch_text || '').toLowerCase().replace(/[^a-záéíóúñ ]/g, '').trim()) }}"));
+upsertNode({ id: 'hos', name: 'Iniciar solicitud de asesor', type: 'n8n-nodes-base.executeWorkflow', typeVersion: 1.4, position: [gx + 440, gy + 860],
+  parameters: { workflowId: { __rl: true, mode: 'id', value: HANDOFF_WF_ID }, mode: 'once',
+    workflowInputs: hoInputs('', 'start'), options: { waitForSubWorkflow: true } } });
+unlink('¿Botón de ejemplos?', 'Filtro de entrada (Guardrails)');
+link('¿Botón de ejemplos?', hoBtn, 1);
+link(hoBtn, 'Iniciar solicitud de asesor', 0);
+link(hoBtn, 'Filtro de entrada (Guardrails)', 1);
+link('Iniciar solicitud de asesor', 'Cerrar ráfaga (SQL)');
+
+upsertNode({
+  id: 'tho', name: 'solicitar_asesor', type: '@n8n/n8n-nodes-langchain.toolWorkflow', typeVersion: 2.2, position: [ax + 520, ay + 220],
+  parameters: {
+    description: 'Inicia la solicitud para que un asesor humano de Automaverso contacte al usuario: le pide su nombre y cómo prefiere que lo contacten (chat, llamada por WhatsApp o al celular) con mensajes y botones que se envían solos. Úsala cuando el usuario quiera hablar con una persona o asesor, que lo llamen o lo contacten, o quiera avanzar con Automaverso. Devuelve ENVIADO.',
+    workflowId: { __rl: true, mode: 'id', value: HANDOFF_WF_ID },
+    workflowInputs: hoInputs('', 'start'),
+  },
+});
+link('solicitar_asesor', 'Agente IA', 0, 'ai_tool');
+
+// ---------------------------------------------------------------- 10. diagnóstico por WhatsApp
+// Botón "Diagnóstico gratis" ⇒ FLOW · Diagnóstico (start). Mientras haya un diagnóstico en curso,
+// cada mensaje va directo al flujo (continue). Tiene prioridad sobre la solicitud de asesor.
+const DIAG_WF_ID = '22QxZnJGhImy7Dmg';
+const dgInputs = (text, action) => ({ ...hoInputs(text, action) });
+const execFlow = (id, name, pos, wfId, inputs) => ({ id, name, type: 'n8n-nodes-base.executeWorkflow', typeVersion: 1.4, position: pos,
+  parameters: { workflowId: { __rl: true, mode: 'id', value: wfId }, mode: 'once', workflowInputs: inputs, options: { waitForSubWorkflow: true } } });
+{
+  const q = byName('Preparar contexto (SQL)');
+  if (!q.parameters.query.includes('diagnosis_step')) q.parameters.query += ',\n       chatbot.active_diagnosis_step($1) AS diagnosis_step';
+}
+const dgIf = '¿Diagnóstico en curso?';
+upsertNode(boolIf('dga', dgIf, [gx - 520, gy + 420], '{{ !!$json.diagnosis_step }}'));
+upsertNode(execFlow('dgc', 'Continuar diagnóstico', [gx - 280, gy + 1080], DIAG_WF_ID,
+  dgInputs("={{ $('Preparar contexto (SQL)').first().json.batch_text }}", 'continue')));
+unlink(noSup, hoIf);
+link(noSup, dgIf, 1);
+link(dgIf, 'Continuar diagnóstico', 0);
+link(dgIf, hoIf, 1);
+link('Continuar diagnóstico', 'Cerrar ráfaga (SQL)');
+
+const dgBtn = '¿Botón de diagnóstico?';
+upsertNode(boolIf('dgb', dgBtn, [gx - 40, gy + 1080],
+  "{{ ['diagnostico gratis', 'diagnóstico gratis', 'hacer el diagnostico', 'hacer el diagnóstico', 'quiero el diagnostico', 'quiero el diagnóstico', 'diagnostico', 'diagnóstico'].includes(String($json.batch_text || '').toLowerCase().replace(/[^a-záéíóúñ ]/g, '').trim()) }}"));
+upsertNode(execFlow('dgs', 'Iniciar diagnóstico', [gx + 200, gy + 1080], DIAG_WF_ID, dgInputs('', 'start')));
+unlink('¿Solo saludo?', '¿Botón de ejemplos?');
+link('¿Solo saludo?', dgBtn, 1);
+link(dgBtn, 'Iniciar diagnóstico', 0);
+link(dgBtn, '¿Botón de ejemplos?', 1);
+link('Iniciar diagnóstico', 'Cerrar ráfaga (SQL)');
+
+upsertNode({
+  id: 'tdg', name: 'iniciar_diagnostico', type: '@n8n/n8n-nodes-langchain.toolWorkflow', typeVersion: 2.2, position: [ax + 700, ay + 220],
+  parameters: {
+    description: 'Inicia el diagnóstico gratis de automatización por WhatsApp: unas 15 preguntas con botones y listas que se envían solas y, al final, el resultado (horas y dinero que podría ahorrar, potencial y por dónde empezar). Úsala cuando el usuario quiera el diagnóstico, saber cuánto podría ahorrar o evaluar qué automatizar. Devuelve ENVIADO.',
+    workflowId: { __rl: true, mode: 'id', value: DIAG_WF_ID },
+    workflowInputs: dgInputs('', 'start'),
+  },
+});
+link('iniciar_diagnostico', 'Agente IA', 0, 'ai_tool');
 
 writeFileSync(FILE, JSON.stringify(wf, null, 2) + '\n');
 console.log('nodos:', wf.nodes.length, '| conexiones desde:', Object.keys(C).length);

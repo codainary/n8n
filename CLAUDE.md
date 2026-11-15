@@ -14,7 +14,7 @@ Desde aquí se diseñan, validan, despliegan y versionan workflows en dos instan
 
 Documentación completa: **`docs/chatbot-whatsapp.md`** (arquitectura, esquema, workflows, seguridad, pruebas).
 
-- Workflows: `WA · 1…5` (ingesta, procesamiento, enriquecimiento, mantenimiento, envío de documentos), `KB · 1…2` (Drive → Pinecone), `TOOL · …` (herramientas del agente).
+- Workflows: `WA · 1…5` (ingesta, procesamiento, enriquecimiento, mantenimiento, envío de documentos), `KB · 1…2` (Drive → Pinecone), `EX · 1` (videos de ejemplo Drive → Meta), `TOOL · …` (herramientas del agente), `FLOW · Contacto con asesor` (lead → Sheet + Telegram), `FLOW · Diagnóstico` (diagnóstico gratis por WhatsApp).
 - Estado y lógica crítica en el Postgres del VPS, esquemas `chatbot` y `kb` (SQL versionado en `sql/`). Ese Postgres no tiene puertos públicos: aplicar/consultar SQL con `node scripts/apply-sql-remote.mjs <archivo.sql> [--raw]`.
 - Secretos del bot (App Secret, verify token, etc.) en `chatbot.app_config`, nunca en workflows ni en git.
 - **Convención de herramientas**: workflow `TOOL · <verbo> <objeto>` con entradas tipadas que devuelve `{ response }`, conectado al agente de `WA · 2` con «Call n8n Sub-Workflow Tool». El system prompt está en `scripts/phase2-agent.mjs`.

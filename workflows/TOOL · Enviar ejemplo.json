@@ -1,0 +1,501 @@
+{
+  "id": "tyW4qHNDKHbslgGA",
+  "name": "TOOL · Enviar ejemplo",
+  "active": true,
+  "nodes": [
+    {
+      "id": "t1",
+      "name": "Entrada",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "wa_id",
+              "type": "string"
+            },
+            {
+              "name": "tema",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t2",
+      "name": "Elegir ejemplo (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT n.*, $1::text AS wa_id, chatbot.config('wa_phone_number_id') AS phone_number_id\n  FROM chatbot.next_example($1, NULLIF($2, '')) n",
+        "options": {
+          "queryReplacement": "={{ [ $json.wa_id, $json.tema || '' ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "t3",
+      "name": "¿Hay ejemplo por ver?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "h1",
+              "leftValue": "={{ $json.example_id ?? 0 }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "t4",
+      "name": "Enviar video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput",
+      "position": [
+        680,
+        180
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $('Elegir ejemplo (SQL)').first().json.phone_number_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $json.wa_id, type: 'video', video: { id: $json.meta_media_id, caption: $json.caption } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "t5",
+      "name": "Registrar video (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        920,
+        120
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT r.*, chatbot.example_sent($2, $5::int, $1) AS seen FROM chatbot.register_outbound(jsonb_build_object(\n  'wamid', $1, 'wa_id', $2, 'type', 'video', 'caption', $3,\n  'agent_text', '[Video de ejemplo enviado: ' || $4 || ']', 'raw', $6::jsonb)) r",
+        "options": {
+          "queryReplacement": "={{ [ $json.messages[0].id, $('Elegir ejemplo (SQL)').first().json.wa_id, $('Elegir ejemplo (SQL)').first().json.caption, $('Elegir ejemplo (SQL)').first().json.title, $('Elegir ejemplo (SQL)').first().json.example_id, JSON.stringify($json) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "t6",
+      "name": "Enviar botones",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        1140,
+        120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $('Elegir ejemplo (SQL)').first().json.phone_number_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Elegir ejemplo (SQL)').first().json.wa_id, type: 'interactive', interactive: { type: 'button', body: { text: ($('Elegir ejemplo (SQL)').first().json.remaining > 0 ? '¿Quieres ver otro ejemplo o prefieres avanzar con nosotros?' : 'Ese es nuestro último ejemplo por ahora.\\n\\n¿Te gustaría avanzar con nosotros?') }, action: { buttons: ($('Elegir ejemplo (SQL)').first().json.remaining > 0 ? [ { type: 'reply', reply: { id: 'otro_ejemplo', title: 'Ver otro ejemplo' } }, { type: 'reply', reply: { id: 'asesor', title: 'Hablar con un asesor' } } ] : [ { type: 'reply', reply: { id: 'asesor', title: 'Hablar con un asesor' } } ]) } } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "t7",
+      "name": "Registrar botones (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        1360,
+        120
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT r.* FROM chatbot.register_outbound(jsonb_build_object(\n  'wamid', $1, 'wa_id', $2, 'type', 'interactive', 'text', $3,\n  'agent_text', $3 || E'\\n[Botones: ' || $4 || ']')) r",
+        "options": {
+          "queryReplacement": "={{ [ $json.messages[0].id, $('Elegir ejemplo (SQL)').first().json.wa_id, ($('Elegir ejemplo (SQL)').first().json.remaining > 0 ? '¿Quieres ver otro ejemplo o prefieres avanzar con nosotros?' : 'Ese es nuestro último ejemplo por ahora.\\n\\n¿Te gustaría avanzar con nosotros?'), ($('Elegir ejemplo (SQL)').first().json.remaining > 0 ? 'Ver otro ejemplo | Hablar con un asesor' : 'Hablar con un asesor') ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "t8",
+      "name": "Respuesta: enviado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1580,
+        120
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "t8a",
+              "name": "response",
+              "type": "string",
+              "value": "=ENVIADO: el usuario ya recibió el video «{{ $('Elegir ejemplo (SQL)').first().json.title }}» y los botones para seguir. No agregues texto."
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "t9",
+      "name": "Invalidar video (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        920,
+        340
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT chatbot.example_media_invalid($1::int, $2) AS ok",
+        "options": {
+          "queryReplacement": "={{ [ $('Elegir ejemplo (SQL)').first().json.example_id, JSON.stringify($json.error || $json).slice(0, 500) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "t10",
+      "name": "Respuesta: no enviado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1140,
+        340
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "t10a",
+              "name": "response",
+              "type": "string",
+              "value": "NO_ENVIADO: el video no se pudo enviar en este momento. Discúlpate en una frase y ofrece hablar con un asesor."
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "t11",
+      "name": "Avisar sin más ejemplos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        680,
+        520
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $('Elegir ejemplo (SQL)').first().json.phone_number_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Elegir ejemplo (SQL)').first().json.wa_id, type: 'interactive', interactive: { type: 'button', body: { text: ($('Elegir ejemplo (SQL)').first().json.total > 0 ? 'Ya viste todos nuestros ejemplos.\\n\\nSi quieres, un asesor te muestra cómo aplicarlo a *tu negocio*.' : 'Por ahora no tengo videos de ejemplo disponibles.\\n\\nUn asesor puede mostrarte casos según *tu negocio*.') }, action: { buttons: [ { type: 'reply', reply: { id: 'asesor', title: 'Hablar con un asesor' } } ] } } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "t12",
+      "name": "Registrar aviso (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        920,
+        520
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT r.* FROM chatbot.register_outbound(jsonb_build_object(\n  'wamid', $1, 'wa_id', $2, 'type', 'interactive', 'text', $3,\n  'agent_text', $3 || E'\\n[Botones: ' || $4 || ']')) r",
+        "options": {
+          "queryReplacement": "={{ [ $json.messages[0].id, $('Elegir ejemplo (SQL)').first().json.wa_id, ($('Elegir ejemplo (SQL)').first().json.total > 0 ? 'Ya viste todos nuestros ejemplos.\\n\\nSi quieres, un asesor te muestra cómo aplicarlo a *tu negocio*.' : 'Por ahora no tengo videos de ejemplo disponibles.\\n\\nUn asesor puede mostrarte casos según *tu negocio*.'), 'Hablar con un asesor' ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "t13",
+      "name": "Respuesta: sin más",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1140,
+        520
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "t13a",
+              "name": "response",
+              "type": "string",
+              "value": "SIN_MAS_EJEMPLOS: ya se le dijo al usuario que no hay más videos y se le ofreció un asesor. No agregues texto."
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "note",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -40
+      ],
+      "parameters": {
+        "content": "## TOOL · Enviar ejemplo\nEntradas: `wa_id`, `tema` (opcional: industria o proceso del cliente).\n1. `chatbot.next_example`: siguiente video **no visto** por ese número, priorizando el tema.\n2. Envía el video (media_id ya subido por **EX · 1**) con su texto, lo registra y marca como visto.\n3. Envía botones *Ver otro ejemplo* / *Hablar con un asesor* (solo el segundo si era el último).\n4. Si Meta rechaza el media_id, lo invalida (EX · 1 lo vuelve a subir) y devuelve NO_ENVIADO.\nDevuelve `{ response }` con ENVIADO / SIN_MAS_EJEMPLOS / NO_ENVIADO.",
+        "width": 700,
+        "height": 300
+      }
+    }
+  ],
+  "connections": {
+    "Entrada": {
+      "main": [
+        [
+          {
+            "node": "Elegir ejemplo (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Elegir ejemplo (SQL)": {
+      "main": [
+        [
+          {
+            "node": "¿Hay ejemplo por ver?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay ejemplo por ver?": {
+      "main": [
+        [
+          {
+            "node": "Enviar video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Avisar sin más ejemplos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar video": {
+      "main": [
+        [
+          {
+            "node": "Registrar video (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalidar video (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar video (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Enviar botones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar botones": {
+      "main": [
+        [
+          {
+            "node": "Registrar botones (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar botones (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Respuesta: enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invalidar video (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Respuesta: no enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Avisar sin más ejemplos": {
+      "main": [
+        [
+          {
+            "node": "Registrar aviso (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar aviso (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Respuesta: sin más",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionOrder": "v1"
+  },
+  "pinData": null,
+  "staticData": null,
+  "tags": []
+}

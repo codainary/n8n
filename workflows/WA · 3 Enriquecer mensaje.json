@@ -80,16 +80,34 @@
                 },
                 "conditions": [
                   {
-                    "id": "r1",
+                    "id": "tx0",
                     "leftValue": "={{ $json.msg_type }}",
                     "rightValue": "text",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
                     }
+                  },
+                  {
+                    "id": "tx1",
+                    "leftValue": "={{ $json.msg_type }}",
+                    "rightValue": "button",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "tx2",
+                    "leftValue": "={{ $json.msg_type }}",
+                    "rightValue": "interactive",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
                   }
                 ],
-                "combinator": "and"
+                "combinator": "or"
               }
             },
             {
@@ -552,7 +570,7 @@
       "parameters": {
         "width": 520,
         "height": 200,
-        "content": "## WA · 3 Enriquecer mensaje\nSub-workflow (1 ejecución por mensaje). Convierte cualquier entrante en `agent_text`:\n- texto → tal cual\n- audio → descarga + guarda + transcribe (gpt-4o-mini-transcribe)\n- imagen → descarga + guarda + visión (gpt-4.1-mini)\n- documento → descarga + guarda + descripción\n- otro → `[Formato no soportado]`\nLos medios se descargan YA: las URL de Meta caducan."
+        "content": "## WA · 3 Enriquecer mensaje\nSub-workflow (1 ejecución por mensaje). Convierte cualquier entrante en `agent_text`:\n- texto y respuestas a botones/listas → tal cual (título del botón)\n- audio → descarga + guarda + transcribe (gpt-4o-mini-transcribe)\n- imagen → descarga + guarda + visión (gpt-4.1-mini)\n- documento → descarga + guarda + descripción\n- otro → `[Formato no soportado]`\nLos medios se descargan YA: las URL de Meta caducan."
       }
     }
   ],

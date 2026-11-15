@@ -1,0 +1,822 @@
+{
+  "id": "Rjvru2W4NGlXdBw3",
+  "name": "FLOW · Contacto con asesor",
+  "active": true,
+  "nodes": [
+    {
+      "id": "h1",
+      "name": "Entrada",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "wa_id",
+              "type": "string"
+            },
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "action",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "h2",
+      "name": "Paso (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT s.*, $1::text AS wa_id, chatbot.config('wa_phone_number_id') AS phone_number_id,\n       chatbot.config('leads_sheet_id') AS sheet_id, chatbot.config('telegram_leads_chat_id') AS telegram_chat_id,\n       chatbot.known_lead_id($1) AS known_lead_id\n  FROM (SELECT 1) x LEFT JOIN LATERAL chatbot.handoff_step($1, $2, $3) s ON true",
+        "options": {
+          "queryReplacement": "={{ [ $json.wa_id, $json.text || '', $json.action || 'continue' ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "h3",
+      "name": "Tipo de respuesta",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "renameOutput": true,
+              "outputKey": "text",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "rtext",
+                    "leftValue": "={{ $json.reply?.type }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "renameOutput": true,
+              "outputKey": "buttons",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "rbuttons",
+                    "leftValue": "={{ $json.reply?.type }}",
+                    "rightValue": "buttons",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "sin solicitud"
+        }
+      }
+    },
+    {
+      "id": "h4",
+      "name": "Enviar texto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        680,
+        180
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $('Paso (SQL)').first().json.phone_number_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Paso (SQL)').first().json.wa_id, type: 'text', text: { preview_url: false, body: $('Paso (SQL)').first().json.reply.body } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "h5",
+      "name": "Enviar botones",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        680,
+        360
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $('Paso (SQL)').first().json.phone_number_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Paso (SQL)').first().json.wa_id, type: 'interactive', interactive: { type: 'button', body: { text: $('Paso (SQL)').first().json.reply.body }, action: { buttons: $('Paso (SQL)').first().json.reply.buttons.map(b => ({ type: 'reply', reply: { id: b.id, title: b.title } })) } } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "h6",
+      "name": "Registrar respuesta (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        900,
+        260
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT r.* FROM chatbot.register_outbound(jsonb_build_object(\n  'wamid', $1, 'wa_id', $2, 'type', $3, 'text', $4, 'agent_text', $5)) r",
+        "options": {
+          "queryReplacement": "={{ [ $json.messages[0].id, $('Paso (SQL)').first().json.wa_id, $('Paso (SQL)').first().json.reply.type === 'buttons' ? 'interactive' : 'text', $('Paso (SQL)').first().json.reply.body, $('Paso (SQL)').first().json.reply.body + ($('Paso (SQL)').first().json.reply.type === 'buttons' ? '\\n[Botones: ' + $('Paso (SQL)').first().json.reply.buttons.map(b => b.title).join(' | ') + ']' : '') ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "h7",
+      "name": "¿Solicitud completa?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        260
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "h7c",
+              "leftValue": "={{ $('Paso (SQL)').first().json.done === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "h8",
+      "name": "Respuesta: paso enviado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1340,
+        420
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "h8a",
+              "name": "response",
+              "type": "string",
+              "value": "ENVIADO: el usuario ya recibió el siguiente paso de la solicitud de asesor. No agregues texto."
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "h9",
+      "name": "Respuesta: sin solicitud",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        680,
+        560
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "h9a",
+              "name": "response",
+              "type": "string",
+              "value": "SIN_SOLICITUD"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "h10",
+      "name": "Conversación (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        1340,
+        160
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT string_agg(CASE role WHEN 'user' THEN 'Cliente: ' ELSE 'Asistente: ' END || content, E'\\n' ORDER BY at) AS transcript\n  FROM chatbot.agent_context($1, 40)",
+        "options": {
+          "queryReplacement": "={{ [ $('Paso (SQL)').first().json.wa_id ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "h11",
+      "name": "Resumir conversación (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "position": [
+        1560,
+        160
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4.1-mini', temperature: 0.2, max_tokens: 200, messages: [ { role: 'system', content: \"Resume en español, en 2 o 3 frases cortas, la conversación de WhatsApp entre un posible cliente y el asistente de Automaverso (automatización con IA). Incluye qué necesita o le interesa al cliente, su negocio o sector si lo mencionó, y si vio ejemplos. No inventes datos ni incluyas saludos. Si no hay información útil, di que solo pidió hablar con un asesor.\" }, { role: 'user', content: $json.transcript || '' } ] }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "sevrRORNVNDEXyvj",
+          "name": "OpenAI (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "h12",
+      "name": "Leer Leads (Sheets)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        1780,
+        160
+      ],
+      "parameters": {
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Paso (SQL)').first().json.sheet_id }}/values/Leads!A1:Z?valueRenderOption=FORMATTED_VALUE",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "7rT6HnkbOiymsTAt",
+          "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
+        }
+      }
+    },
+    {
+      "id": "h13",
+      "name": "Preparar fila del lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        160
+      ],
+      "parameters": {
+        "jsCode": "// Why Code: ubicar a la persona en el Sheet (por teléfono, por nombre de columna) y combinar\n// su fila existente con los datos nuevos sin pisar lo que llenó el website.\nconst step = $('Paso (SQL)').first().json;\nconst values = $('Leer Leads (Sheets)').first().json.values || [];\nconst header = (values[0] || []).map(h => String(h).trim());\nconst col = (name) => header.indexOf(name);\nconst required = ['Lead ID', 'Etapa', 'Nombre o empresa', 'WhatsApp / teléfono', 'Medio de contacto', 'Diagnóstico ID',\n  'Resumen conversación (WhatsApp)', 'Canal de entrada', 'Creado', 'Actualizado'];\nconst missing = required.filter(h => col(h) < 0);\nif (missing.length) throw new Error('Faltan columnas en la hoja Leads: ' + missing.join(', '));\n\nconst last10 = (v) => String(v || '').replace(/\\D/g, '').slice(-10);\nconst keys = new Set([last10(step.wa_id), last10(step.phone)].filter(k => k.length === 10));\nlet rowIndex = -1;  // índice en values (0 = encabezado)\n// 1) por el Lead ID que ya conocemos de este WhatsApp; 2) por teléfono\nif (step.known_lead_id) rowIndex = values.findIndex((r, i) => i > 0 && String(r[col('Lead ID')] || '').trim() === step.known_lead_id);\nfor (let i = values.length - 1; i >= 1 && rowIndex < 1; i--) {\n  if (keys.has(last10(values[i][col('WhatsApp / teléfono')]))) { rowIndex = i; break; }\n}\nconst now = DateTime.now().setZone('America/Bogota').toFormat('yyyy-MM-dd HH:mm');\nconst row = rowIndex > 0 ? [...values[rowIndex]] : [];\nwhile (row.length < header.length) row.push('');\nconst get = (h) => String(row[col(h)] ?? '').trim();\nconst put = (h, v) => { if (col(h) >= 0) row[col(h)] = v; };\n\nconst isNew = rowIndex < 0;\nconst leadId = isNew ? 'WA-' + DateTime.now().setZone('America/Bogota').toFormat('yyyyMMdd') + '-' + String(step.handoff_id).padStart(4, '0') : get('Lead ID');\nif (isNew) { put('Lead ID', leadId); put('Canal de entrada', 'WhatsApp'); put('Creado', now); }\nif (!get('Etapa')) put('Etapa', 'Contacto solicitado');\nif (!get('Nombre o empresa') && step.name) put('Nombre o empresa', step.name);\nput('WhatsApp / teléfono', step.phone_pretty);\nput('Medio de contacto', step.channel_label);\nput('Resumen conversación (WhatsApp)', $('Resumir conversación (OpenAI)').first().json.choices?.[0]?.message?.content?.trim() || '');\nput('Actualizado', now);\n\nconst sheetRow = isNew ? null : rowIndex + 1;  // número de fila en la hoja\nconst lastCol = String.fromCharCode(64 + header.length);\nreturn [{ json: {\n  isNew, leadId, sheetRow, row,\n  range: isNew ? 'Leads!A1:' + lastCol + '1' : 'Leads!A' + sheetRow + ':' + lastCol + sheetRow,\n  diagnosisId: get('Diagnóstico ID'),\n  name: get('Nombre o empresa') || step.name || '',\n  summary: get('Resumen conversación (WhatsApp)'),\n} }];"
+      }
+    },
+    {
+      "id": "h14",
+      "name": "¿Lead nuevo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2220,
+        160
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "h14c",
+              "leftValue": "={{ $json.isNew }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "h15",
+      "name": "Agregar lead (Sheets)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "position": [
+        2440,
+        60
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Paso (SQL)').first().json.sheet_id }}/values/{{ encodeURIComponent($json.range) }}:append?valueInputOption=RAW&insertDataOption=OVERWRITE",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ values: [ $json.row ] }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "7rT6HnkbOiymsTAt",
+          "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
+        }
+      }
+    },
+    {
+      "id": "h16",
+      "name": "Actualizar lead (Sheets)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "position": [
+        2440,
+        260
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Paso (SQL)').first().json.sheet_id }}/values/{{ encodeURIComponent($json.range) }}?valueInputOption=RAW",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ values: [ $json.row ] }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "7rT6HnkbOiymsTAt",
+          "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
+        }
+      }
+    },
+    {
+      "id": "h17",
+      "name": "Avisar en Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "position": [
+        2660,
+        160
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Paso (SQL)').first().json.telegram_chat_id }}",
+        "text": "={{ [\n  '🔔 <b>Nuevo lead desde WhatsApp</b>',\n  '',\n  '👤 <b>Nombre:</b> ' + String($('Preparar fila del lead').first().json.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),\n  '📞 <b>Prefiere:</b> ' + $('Paso (SQL)').first().json.channel_label,\n  '📱 <b>Teléfono:</b> ' + $('Paso (SQL)').first().json.phone_pretty,\n  '🧾 <b>Diagnóstico:</b> ' + ($('Preparar fila del lead').first().json.diagnosisId ? '✅ Sí (' + String($('Preparar fila del lead').first().json.diagnosisId || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + ')' : '❌ No'),\n  '🆔 <b>Lead:</b> ' + $('Preparar fila del lead').first().json.leadId + ($('Preparar fila del lead').first().json.isNew ? ' (nuevo)' : ' (existente)'),\n  '',\n  '📝 <b>Resumen</b>',\n  String($('Preparar fila del lead').first().json.summary || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),\n  '',\n  '☎️ Llamar: +' + $('Paso (SQL)').first().json.phone\n].join('\\n') }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "💬 Abrir chat de WhatsApp",
+                    "additionalFields": {
+                      "url": "=https://wa.me/{{ $('Paso (SQL)').first().json.wa_id }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📊 Ver en el Sheet",
+                    "additionalFields": {
+                      "url": "=https://docs.google.com/spreadsheets/d/{{ $('Paso (SQL)').first().json.sheet_id }}/edit#gid=1664279207"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true,
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "T2kzKYa0lIBPkI9c",
+          "name": "Telegram Leads (automaversosas_bot)"
+        }
+      },
+      "webhookId": "ebbb737c-a718-4007-a907-c2fadb63d172"
+    },
+    {
+      "id": "h18",
+      "name": "Registrar aviso (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        2880,
+        160
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT chatbot.handoff_notified($1::int, $2, NULLIF($3, '')::int, $4, $5, NULLIF($6, '')::bigint, $7) AS ok",
+        "options": {
+          "queryReplacement": "={{ [ $('Paso (SQL)').first().json.handoff_id, $('Preparar fila del lead').first().json.leadId, $('Preparar fila del lead').first().json.isNew ? (String(($('Agregar lead (Sheets)').first().json.updates || {}).updatedRange || '').match(/![A-Z]+(\\d+)/) || [])[1] || '' : String($('Preparar fila del lead').first().json.sheetRow), $('Preparar fila del lead').first().json.diagnosisId, $('Preparar fila del lead').first().json.summary, String($json.result?.message_id || $json.message_id || ''), ($json.result?.message_id || $json.message_id) ? '' : JSON.stringify($json.error || $json).slice(0, 500) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "h19",
+      "name": "Respuesta: contacto registrado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3100,
+        160
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "h19a",
+              "name": "response",
+              "type": "string",
+              "value": "ENVIADO: la solicitud de asesor quedó registrada y el usuario ya recibió la confirmación. No agregues texto."
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "note",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -80
+      ],
+      "parameters": {
+        "width": 900,
+        "height": 300,
+        "content": "## FLOW · Contacto con asesor\nEntradas: `wa_id`, `text` (respuesta del usuario), `action` (`start` | `continue`).\n1. `chatbot.handoff_step` avanza la solicitud: nombre → medio de contacto (chat / llamada WhatsApp / llamada al celular) → confirmar u obtener el número. Devuelve el texto o los botones a enviar. *cancelar* la detiene; vence a las 2 h.\n2. Al completarse: resumen de la conversación (OpenAI) → hoja **Leads** del Sheet «Automaverso · Leads» (busca a la persona por teléfono; si existe solo actualiza contacto, resumen y fecha; si no, crea `WA-…` con Etapa *Contacto solicitado*) → aviso al grupo de Telegram con enlace al chat y si hizo diagnóstico.\n3. Resultado en `chatbot.handoffs`. Devuelve `{ response }`."
+      }
+    }
+  ],
+  "connections": {
+    "Entrada": {
+      "main": [
+        [
+          {
+            "node": "Paso (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paso (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Tipo de respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tipo de respuesta": {
+      "main": [
+        [
+          {
+            "node": "Enviar texto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar botones",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta: sin solicitud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar texto": {
+      "main": [
+        [
+          {
+            "node": "Registrar respuesta (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar botones": {
+      "main": [
+        [
+          {
+            "node": "Registrar respuesta (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar respuesta (SQL)": {
+      "main": [
+        [
+          {
+            "node": "¿Solicitud completa?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Solicitud completa?": {
+      "main": [
+        [
+          {
+            "node": "Conversación (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta: paso enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversación (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Resumir conversación (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumir conversación (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Leer Leads (Sheets)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer Leads (Sheets)": {
+      "main": [
+        [
+          {
+            "node": "Preparar fila del lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar fila del lead": {
+      "main": [
+        [
+          {
+            "node": "¿Lead nuevo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Lead nuevo?": {
+      "main": [
+        [
+          {
+            "node": "Agregar lead (Sheets)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Actualizar lead (Sheets)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agregar lead (Sheets)": {
+      "main": [
+        [
+          {
+            "node": "Avisar en Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar lead (Sheets)": {
+      "main": [
+        [
+          {
+            "node": "Avisar en Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Avisar en Telegram": {
+      "main": [
+        [
+          {
+            "node": "Registrar aviso (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar aviso (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Respuesta: contacto registrado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "timezone": "America/Bogota",
+    "executionOrder": "v1"
+  },
+  "pinData": null,
+  "staticData": null,
+  "tags": []
+}

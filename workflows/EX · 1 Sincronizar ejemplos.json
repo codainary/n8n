@@ -1,0 +1,428 @@
+{
+  "id": "EIXdGJeF4Ir9hxFD",
+  "name": "EX · 1 Sincronizar ejemplos",
+  "active": true,
+  "nodes": [
+    {
+      "id": "s1",
+      "name": "Cada hora",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "s2",
+      "name": "Sincronizar ahora (manual)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "s2b",
+      "name": "Desde otro workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        600
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "s3",
+      "name": "Configuración (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT chatbot.config('examples_folder_id') AS folder, chatbot.config('wa_phone_number_id') AS phone_number_id",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "s4",
+      "name": "Listar carpeta (Drive)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files?pageSize=200&fields=files(id,name,mimeType,md5Checksum,size)&q=' + encodeURIComponent(\"'\" + $json.folder + \"' in parents and trashed=false\") }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "WSHDp2ZQ4qMFpLOi",
+          "name": "Google Drive KB (cuenta de servicio n8n-kb)"
+        }
+      }
+    },
+    {
+      "id": "s5",
+      "name": "Exportar catálogo (CSV)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "url": "={{ 'https://www.googleapis.com/drive/v3/files/' + ($json.files.find(f => f.mimeType === 'application/vnd.google-apps.spreadsheet' && f.name.startsWith('_')) || { id: 'sin-catalogo' }).id + '/export?mimeType=text/csv' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "WSHDp2ZQ4qMFpLOi",
+          "name": "Google Drive KB (cuenta de servicio n8n-kb)"
+        }
+      }
+    },
+    {
+      "id": "s6",
+      "name": "Leer catálogo",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "operation": "csv",
+        "binaryPropertyName": "data",
+        "options": {
+          "headerRow": true
+        }
+      }
+    },
+    {
+      "id": "s7",
+      "name": "Planificar (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM chatbot.examples_plan($1::jsonb, $2::jsonb)",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify($('Listar carpeta (Drive)').first().json.files), JSON.stringify($('Leer catálogo').all().map(i => i.json)) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "s8",
+      "name": "Descargar video (Drive)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "position": [
+        1320,
+        300
+      ],
+      "parameters": {
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.drive_file_id }}?alt=media",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "WSHDp2ZQ4qMFpLOi",
+          "name": "Google Drive KB (cuenta de servicio n8n-kb)"
+        }
+      }
+    },
+    {
+      "id": "s9",
+      "name": "Subir a WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $('Configuración (SQL)').first().json.phone_number_id }}/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "type",
+              "value": "={{ $('Planificar (SQL)').item.json.mime_type || 'video/mp4' }}"
+            },
+            {
+              "name": "messaging_product",
+              "value": "whatsapp"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      }
+    },
+    {
+      "id": "s10",
+      "name": "Registrar subida (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        1760,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT chatbot.example_uploaded($1::int, $2, $3) AS ok, $4::text AS file_name",
+        "options": {
+          "queryReplacement": "={{ [ $('Planificar (SQL)').item.json.id, $json.id || '', $json.id ? '' : JSON.stringify($json.error || $json).slice(0, 500), $('Planificar (SQL)').item.json.file_name ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "note",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -40
+      ],
+      "parameters": {
+        "content": "## EX · 1 Sincronizar ejemplos\nCarpeta de Drive `examples_folder_id` (en `chatbot.app_config`) con los videos y el Sheet **_Catálogo de ejemplos** (archivo · titulo · descripcion · tema · activo · orden).\n- Cada hora: lista la carpeta, lee el catálogo y `chatbot.examples_plan` decide qué subir.\n- Sube a Meta solo lo nuevo, lo cambiado o lo que vence (media_id dura 30 días; se renueva a los 25).\n- Sin cambios ⇒ termina en «Planificar» (no se guarda la ejecución).\n- Videos > 16 MB se rechazan con error en `chatbot.v_examples`.",
+        "width": 760,
+        "height": 260
+      }
+    }
+  ],
+  "connections": {
+    "Cada hora": {
+      "main": [
+        [
+          {
+            "node": "Configuración (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sincronizar ahora (manual)": {
+      "main": [
+        [
+          {
+            "node": "Configuración (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Desde otro workflow": {
+      "main": [
+        [
+          {
+            "node": "Configuración (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Listar carpeta (Drive)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar carpeta (Drive)": {
+      "main": [
+        [
+          {
+            "node": "Exportar catálogo (CSV)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exportar catálogo (CSV)": {
+      "main": [
+        [
+          {
+            "node": "Leer catálogo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer catálogo": {
+      "main": [
+        [
+          {
+            "node": "Planificar (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planificar (SQL)": {
+      "main": [
+        [
+          {
+            "node": "Descargar video (Drive)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar video (Drive)": {
+      "main": [
+        [
+          {
+            "node": "Subir a WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subir a WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Registrar subida (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "timezone": "America/Bogota",
+    "executionOrder": "v1"
+  },
+  "pinData": null,
+  "staticData": {
+    "node:Cada hora": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": []
+}
