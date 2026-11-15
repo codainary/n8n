@@ -38,10 +38,10 @@ Canal: WhatsApp Business Platform (API oficial de Meta, Cloud API). Número actu
 │   → espejo: si el último mensaje fue audio → ElevenLabs (voz Sofía) ; si no → texto        │
 │   → Graph API → register_outbound (wamid) → finish_batch → ¿llegaron más? → se re-invoca   │
 └───────────────────────────────────────────────────────────────────────────────────────────┘
-   WA · 4 Mantenimiento (cada 2 min): cierra ventanas de 24 h, reintenta ráfagas atascadas.
+   WA · 4 Mantenimiento (cada 5 min): cierra ventanas de 24 h, reintenta ráfagas atascadas.
    WA · 5 Enviar documento: sub-workflow; ventana abierta → documento; cerrada → plantilla.
 
- Google Drive ──(cada 5 min)──► KB · 1 Sincronizar Drive ──► KB · 2 Procesar archivo ──► Pinecone
+ Google Drive ──(cada 10 min)─► KB · 1 Sincronizar Drive ──► KB · 2 Procesar archivo ──► Pinecone
  «Automaverso - Base de conocimiento del bot»     reconciliación con kb.files       embeddings
                                                                                            ▲
                        TOOL · Consultar base de conocimiento ──────── consulta (top-k) ─────┘
@@ -126,9 +126,9 @@ caracteres (~800 tokens) con 400 de solapamiento, cortando por párrafos.
 | `WA · 1 Ingesta webhook` | `GET/POST /webhook/wa` | handshake de Meta, firma, ingesta idempotente, 200 rápido |
 | `WA · 2 Procesar conversación` | sub-workflow | ráfaga → enriquecer → filtros → agente → respuesta espejo |
 | `WA · 3 Enriquecer mensaje` | sub-workflow | descarga y guarda medios; transcribe; analiza imagen |
-| `WA · 4 Mantenimiento` | cada 2 min | cierra ventanas de 24 h; reintenta / marca fallidas |
+| `WA · 4 Mantenimiento` | cada 5 min | cierra ventanas de 24 h; reintenta / marca fallidas |
 | `WA · 5 Enviar documento` | sub-workflow | documento si la ventana está abierta; si no, plantilla |
-| `KB · 1 Sincronizar Drive` | cada 5 min + manual | reconciliación Drive ↔ `kb.files` → plan → procesar |
+| `KB · 1 Sincronizar Drive` | cada 10 min + manual | reconciliación Drive ↔ `kb.files` → plan → procesar |
 | `KB · 2 Procesar archivo` | sub-workflow | exportar → fragmentar → embeddings → Pinecone → registro |
 | `TOOL · Consultar base de conocimiento` | herramienta del agente | top-k por namespace, umbral, fuentes, log |
 
@@ -136,7 +136,7 @@ caracteres (~800 tokens) con 400 de solapamiento, cortando por párrafos.
 
 ### Ingesta de Drive: latencia y alternativa elegida
 El trigger de Google Drive de n8n **consulta periódicamente** (no es tiempo real; mínimo 1 min) y **no
-detecta archivos eliminados**. Por eso `KB · 1` hace una **reconciliación cada 5 minutos**: lista la
+detecta archivos eliminados**. Por eso `KB · 1` hace una **reconciliación cada 10 minutos**: lista la
 carpeta, compara contra `kb.files` y decide `add / update / delete / unsupported / unchanged`. Detecta todo,
 se recupera sola si n8n estuvo caído y es idempotente. Salvaguarda: si Drive devuelve la carpeta vacía
 y hay archivos indexados, **aborta sin borrar** (posible fallo de acceso). Tiempo real con push de Drive
@@ -213,7 +213,7 @@ herramientas `TOOL · …` del agente (convención §5). `WA · 5` ya permite en
 | Envío de documento (`WA · 5`) | PDF entregado y registrado como saliente |
 
 Pendiente de ejecutar con acceso al VPS: **reiniciar n8n a mitad de una ráfaga** (`docker compose restart n8n`
-durante los 4 s de espera). Esperado: la ráfaga queda `pending`/`processing` y `WA · 4` la retoma en ≤ 5 min
+durante los 4 s de espera). Esperado: la ráfaga queda `pending`/`processing` y `WA · 4` la retoma en ≤ 10 min
 sin duplicar (la lógica está probada; falta la prueba física del reinicio).
 
 ### Base de conocimiento (Fase 2)
@@ -255,3 +255,17 @@ Consultas útiles: `SELECT * FROM chatbot.v_timeline WHERE wa_id = '57…' ORDER
 **Para pasar a producción**: número real verificado en Meta (y método de pago en la WABA), plantilla
 UTILITY propia para reabrir conversaciones (reemplazar `hello_world` en `WA · 5`), y rotar los secretos que
 pasaron por el chat de desarrollo (token de Meta, App Secret, claves de OpenAI/ElevenLabs/Pinecone, token de Cloudflare).
+
+---
+
+## 10. Volumen de ejecuciones
+
+Casi todas las ejecuciones son de los procesos programados, no del bot:
+`WA · 4` cada 5 min (288/día) y `KB · 1` cada 10 min (144/día) ≈ **430 ejecuciones/día** en reposo.
+`KB · 2` solo corre cuando un archivo cambió. Las ejecuciones exitosas de `WA · 4` y `KB · 1` **no se
+guardan** en n8n (sí los errores); su historial completo está en Postgres (`kb.sync_runs`, `kb.sync_events`).
+
+Corrección aplicada (2026-11-15): cuando no había cambios en Drive, `KB · 1` llamaba a `KB · 2` con un
+elemento vacío, no se cerraba la ejecución y las 3 pasadas siguientes salían por «otra en curso»
+(68 de 75 corridas terminaron «abandonada (timeout)»). Ahora una rama `¿Sin cambios?` cierra la ejecución
+directamente; los cambios en Drive llegan a Pinecone en ≤ 10 min.

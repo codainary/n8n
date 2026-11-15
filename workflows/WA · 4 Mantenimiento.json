@@ -5,7 +5,7 @@
   "nodes": [
     {
       "id": "k1",
-      "name": "Cada 2 minutos",
+      "name": "Cada 5 minutos",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -17,7 +17,7 @@
           "interval": [
             {
               "field": "minutes",
-              "minutesInterval": 2
+              "minutesInterval": 5
             }
           ]
         }
@@ -125,12 +125,12 @@
       "parameters": {
         "width": 760,
         "height": 200,
-        "content": "## WA · 4 Mantenimiento (red de seguridad)\n- Cierra conversaciones con la ventana de 24 h vencida (y las abiertas por plantilla sin respuesta).\n- Marca `failed` las ráfagas que agotaron 3 intentos.\n- Relanza WA · 2 para números con pendientes > 1 min o ráfagas atascadas > 5 min (p. ej. n8n se reinició a mitad).\nNada depende de memoria en RAM: todo el estado está en `chatbot.*`."
+        "content": "## WA · 4 Mantenimiento (red de seguridad, cada 5 min)\n- Cierra conversaciones con la ventana de 24 h vencida (y las abiertas por plantilla sin respuesta).\n- Marca `failed` las ráfagas que agotaron 3 intentos.\n- Relanza WA · 2 para números con pendientes > 1 min o ráfagas atascadas > 5 min (p. ej. n8n se reinició a mitad).\nNada depende de memoria en RAM: todo el estado está en `chatbot.*`."
       }
     }
   ],
   "connections": {
-    "Cada 2 minutos": {
+    "Cada 5 minutos": {
       "main": [
         [
           {
@@ -172,6 +172,14 @@
   "pinData": null,
   "staticData": {
     "node:Cada 2 minutos": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    },
+    "node:Cada 5 minutos": {
       "recurrenceRules": [
         null
       ],

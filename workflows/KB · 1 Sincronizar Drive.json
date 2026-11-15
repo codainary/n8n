@@ -5,7 +5,7 @@
   "nodes": [
     {
       "id": "t1",
-      "name": "Cada 5 minutos",
+      "name": "Cada 10 minutos",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -17,7 +17,7 @@
           "interval": [
             {
               "field": "minutes",
-              "minutesInterval": 5
+              "minutesInterval": 10
             }
           ]
         }
@@ -283,7 +283,7 @@
       "name": "Solo cambios",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
-      "alwaysOutputData": true,
+      "alwaysOutputData": false,
       "position": [
         1980,
         220
@@ -556,12 +556,74 @@
       "parameters": {
         "width": 880,
         "height": 260,
-        "content": "## KB · 1 Sincronizar Drive → Pinecone (independiente del bot)\n**Reconciliación cada 5 min** (no usa el trigger de Drive: ese solo sondea y no detecta borrados).\n1. Abre una ejecución en `kb.sync_runs` (si ya hay otra corriendo, sale).\n2. Lista subcarpetas (= categoría = namespace) y sus archivos; ignora lo que empieza por «_».\n3. `kb.plan_sync` compara con `kb.files` → add / update / delete / unsupported / unchanged. Si Drive devuelve vacío, **no borra nada**.\n4. KB · 2 procesa cada archivo con cambios; los errores quedan en `kb.sync_events` y se reintentan en la próxima pasada.\n5. Cierra la ejecución con totales.\n**Reindexar todo**: abre este workflow y ejecuta «Reindexar todo (manual)»."
+        "content": "## KB · 1 Sincronizar Drive → Pinecone (independiente del bot)\n**Reconciliación cada 10 min** (no usa el trigger de Drive: ese solo sondea y no detecta borrados).\n1. Abre una ejecución en `kb.sync_runs` (si ya hay otra corriendo, sale).\n2. Lista subcarpetas (= categoría = namespace) y sus archivos; ignora lo que empieza por «_».\n3. `kb.plan_sync` compara con `kb.files` → add / update / delete / unsupported / unchanged. Si Drive devuelve vacío, **no borra nada**.\n4. KB · 2 procesa cada archivo con cambios; los errores quedan en `kb.sync_events` y se reintentan en la próxima pasada.\n5. Cierra la ejecución con totales (si no hubo cambios, se cierra sin llamar a KB · 2).\nLas ejecuciones exitosas no se guardan en n8n: el historial completo está en `kb.sync_runs` / `kb.sync_events`.\n**Reindexar todo**: abre este workflow y ejecuta «Reindexar todo (manual)»."
+      }
+    },
+    {
+      "id": "r13",
+      "name": "¿Sin cambios?",
+      "notes": "Si ningún archivo cambió, cierra la ejecución aquí (sin llamar a KB · 2). Antes quedaba abierta y bloqueaba las 3 pasadas siguientes.",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "executeOnce": true,
+      "position": [
+        1980,
+        40
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "z1",
+              "leftValue": "={{ $('Planificar (SQL)').all().filter(i => ['add', 'update', 'delete', 'unsupported'].includes(i.json.action)).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "r14",
+      "name": "Cerrar sin cambios (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        2200,
+        40
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM kb.finish_run($1::bigint, $2::int)",
+        "options": {
+          "queryReplacement": "={{ [ $('Abrir ejecución (SQL)').first().json.run_id, $('Planificar (SQL)').all().filter(i => i.json.action === 'unchanged').length ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
       }
     }
   ],
   "connections": {
-    "Cada 5 minutos": {
+    "Cada 10 minutos": {
       "main": [
         [
           {
@@ -693,6 +755,11 @@
             "node": "Solo cambios",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "¿Sin cambios?",
+            "type": "main",
+            "index": 0
           }
         ],
         [
@@ -736,17 +803,36 @@
           }
         ]
       ]
+    },
+    "¿Sin cambios?": {
+      "main": [
+        [
+          {
+            "node": "Cerrar sin cambios (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "saveDataErrorExecution": "all",
-    "saveDataSuccessExecution": "all",
+    "saveDataSuccessExecution": "none",
     "timezone": "America/Bogota",
     "executionOrder": "v1"
   },
   "pinData": null,
   "staticData": {
     "node:Cada 5 minutos": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    },
+    "node:Cada 10 minutos": {
       "recurrenceRules": [
         null
       ],
