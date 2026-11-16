@@ -337,27 +337,31 @@ directamente; los cambios en Drive llegan a Pinecone en ≤ 10 min.
 
 ### Flujo «Diagnóstico gratis» (por WhatsApp; ya no se envía al usuario al website)
 
-- **Réplica del diagnóstico del website** (`automaverso-web`): mismas preguntas y opciones
-  (`lib/assessment/options.ts`, `screens.ts`), misma fórmula **v2** (`lib/assessment/report.ts`), misma
-  calificación interna **v2** (`server/services/qualification.ts`) y sugerencias (`suggestions.ts`).
-  Verificado: con las mismas respuestas da exactamente las mismas horas y el mismo ahorro que la web.
-  **Si cambian en el website, actualizar** `sql/007_diagnosis.sql` (catálogo `chatbot.diag_questions`) y
-  `scripts/diagnosis-workflow.mjs` (nodo «Calcular diagnóstico»).
+- **Diagnóstico RÁPIDO**: 5 preguntas, cada una con 2-3 **botones** que se tocan directamente (sin listas):
+  1. Área que más tiempo consume: *Atención y ventas* · *Operaciones/finanzas* · *Marketing/contenido*
+  2. Personas: *Solo yo* · *2 a 5* · *Más de 5*
+  3. Horas por persona a la semana: *Menos de 5 h* · *5 a 10 h* · *Más de 10 h*
+  4. ¿Se hace casi siempre igual?: *Siempre igual* · *Casi siempre* · *Cambia bastante*
+  5. Plazo: *Este mes* · *En 1 a 3 meses* · *Solo explorando*
+- **Cálculo** (`scripts/diagnosis-calc.js`, nodo «Calcular diagnóstico»): fórmula **v2** del website
+  (`automaverso-web/lib/assessment/report.ts`: % automatizable por repetición, 46 semanas, coordinación del
+  equipo ×1,5, potencial por horas, recuperación de un piloto de US$1.000) con rangos simplificados (personas
+  1 / 3,5 / 8; horas 2,5 / 7,5 / 12). El **país sale del indicativo** del WhatsApp y el costo por hora es la
+  referencia del website para ese país con prestaciones (Colombia US$6 × 1,52); en COP si es Colombia.
+  **Calificación interna** simplificada (0-8): volumen 0-3 + plazo 0-3 + equipo 1 + tarea repetible 1 →
+  *encaja* ≥ 6, *dudoso* ≥ 3. Catálogo de preguntas en `sql/007_diagnosis.sql` (`chatbot.diag_questions`).
 - **Disparadores**: botón *Diagnóstico gratis* / escribir «diagnóstico» (enrutador fijo) o pedirlo con texto
   libre (herramienta `iniciar_diagnostico`). Mientras está en curso, todo mensaje va al flujo (prioridad sobre
-  la solicitud de asesor). *cancelar* lo detiene; se retoma dentro de 24 h; 4 respuestas inválidas lo cancelan.
-- **Preguntas** (`chatbot.diagnosis_step`, tabla `chatbot.diagnoses`): ≤ 3 opciones = botones, más = lista;
-  selección múltiple (áreas, herramientas, «qué pasa cuando se atrasa») con *Agregar otra* / *Continuar*; la
-  tarea se elige de 3 ejemplos del área o se escribe; costo por hora en pesos si es Colombia; nombre solo si no lo
-  conocemos (de una solicitud de asesor o diagnóstico anterior); correo opcional con *Omitir*. Pie «Pregunta n de N».
-- **Resultado**: mensaje con horas y ahorro al año (COP si es Colombia), potencial, % automatizable, costo mensual,
-  semanas de recuperación del piloto, 3 sugerencias y efectos; luego botones *Hablar con un asesor* / *Ver ejemplos*.
-- **Sheet**: fila nueva en **Diagnósticos** (`DIAG-WA-yyyymmdd-NNNN`, Canal WhatsApp, respuestas con las etiquetas
-  del website, ahorro en US$, calificación) y en **Leads** crea/actualiza a la persona (Etapa *Diagnosticado*,
-  *Diagnóstico ID*). Ubica a la persona primero por el Lead ID que ya tiene ese WhatsApp (`chatbot.known_lead_id`)
-  y luego por teléfono, para no duplicarla.
-- **Telegram**: aviso con calificación (✅ encaja / 🟡 dudoso / ⛔ no califica + puntos), resultado, respuestas
-  clave, enlace al chat y al Sheet. La calificación nunca se muestra al cliente.
+  la solicitud de asesor); pedirlo de nuevo lo **reinicia**. *cancelar* lo detiene; se retoma dentro de 24 h;
+  4 respuestas inválidas lo cancelan.
+- **Resultado**: horas y ahorro al año, potencial, % automatizable, semanas para pagar un piloto y 3 automatizaciones
+  sugeridas para el área; luego botones *Hablar con un asesor* / *Ver ejemplos*.
+- **Sheet**: fila nueva en **Diagnósticos** (`DIAG-WA-yyyymmdd-NNNN`, Canal WhatsApp, país «por indicativo»,
+  plazo, área, horas/semana, ahorro en US$, calificación «x/8», reporte con las respuestas) y en **Leads**
+  crea/actualiza a la persona (Etapa *Diagnosticado*, *Diagnóstico ID*). Ubica a la persona primero por el Lead ID
+  que ya tiene ese WhatsApp (`chatbot.known_lead_id`) y luego por teléfono, para no duplicarla.
+- **Telegram** (corto): nombre, WhatsApp, calificación (✅ encaja / 🟡 dudoso / ⛔ no califica, x/8) y resultado,
+  con botones al chat y al Sheet. La calificación nunca se muestra al cliente.
 - La solicitud de asesor tampoco vuelve a pedir el nombre si ya lo conocemos.
 - **Herramientas que envían sus propios mensajes** (`enviar_ejemplo`, `solicitar_asesor`, `iniciar_diagnostico`):
   WA · 2 descarta el texto del agente si alguna devolvió ENVIADO / SIN_MAS_EJEMPLOS (lee `intermediateSteps`).

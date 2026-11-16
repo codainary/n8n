@@ -2,8 +2,8 @@
 // Genera «FLOW · Diagnóstico» (sub-workflow):
 //   paso (chatbot.diagnosis_step) → envía los mensajes (texto / botones / lista)
 //   → al terminar: cálculo (fórmula v2 del website) → reporte + botones → Sheet (Leads + Diagnósticos) → Telegram.
-// El cálculo replica automaverso-web: lib/assessment/report.ts (FORMULA_VERSION v2),
-// server/services/qualification.ts (SCORING_VERSION v2) y lib/assessment/suggestions.ts. Si cambian allá, cambiar aquí.
+// Diagnóstico RÁPIDO (5 preguntas con botones). El cálculo (scripts/diagnosis-calc.js) usa la fórmula v2 de
+// automaverso-web (lib/assessment/report.ts) con rangos simplificados y país por indicativo.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
 const PG = { postgres: { id: 'aV6poYyo4OBcJu8E', name: 'Postgres VPS (chatbot)' } };
@@ -57,160 +57,8 @@ const MESSAGE_BODY = `$json.type === 'text'
     : { messaging_product: 'whatsapp', recipient_type: 'individual', to: ${STEP}.wa_id, type: 'interactive', interactive: { type: 'list', body: { text: $json.body }, ...($json.footer ? { footer: { text: $json.footer } } : {}), action: { button: $json.button || 'Ver opciones', sections: [ { title: 'Opciones', rows: $json.rows.map(r => ({ id: r.id, title: r.title, ...(r.description ? { description: r.description } : {}) })) } ] } } }`;
 const AGENT_TEXT = `$json.body + ($json.buttons ? '\\n[Botones: ' + $json.buttons.map(b => b.title).join(' | ') + ']' : '') + ($json.rows ? '\\n[Lista: ' + $json.rows.map(r => r.title).join(' | ') + ']' : '')`;
 
-const CALCULATE = String.raw`// Why Code: réplica exacta de la fórmula del website (report.ts v2), la calificación (qualification.ts v2)
-// y las sugerencias (suggestions.ts); además arma el reporte de WhatsApp y el aviso de Telegram.
-const step = $('Paso (SQL)').first().json;
-const a = step.answers;
-
-// ---- options.ts
-const PEOPLE_MID = { '1': 1, '2-3': 2.5, '4-10': 7, '10+': 12 };
-const HOURS_MID = { lt2: 1, '2-5': 3.5, '5-10': 7.5, '10+': 12 };
-const HOURLY_COST_MID = { lt5: 4, '5-10': 7.5, '10-20': 15, '20-40': 30, '40+': 50 };
-const REFERENCE_HOURLY_COST = { co: 6, latam: 7, us: 30, es: 18, other: 10 };
-const EMPLOYER_LOAD = { co: 1.52, latam: 1.4, us: 1.25, es: 1.32, other: 1.3 };
-const OVERTIME_SURCHARGE = { co: 0.25, latam: 0.25, us: 0.5, es: 0.25, other: 0.25 };
-const COP_PER_USD = 4000;
-// ---- report.ts (v2)
-const FORMULA_VERSION = 'v2', WORK_WEEKS = 46, HOURS_PER_WORKDAY = 8, HOURS_PER_FTE_YEAR = 46 * 40, PILOT_USD = 1000;
-const REPETITION_SHARE = { always: 0.75, mostly: 0.6, varies: 0.4 };
-const PAPER_ONLY_FACTOR = 0.8, RANGE_LOW = 0.85, RANGE_HIGH = 1.1, MAX_SHARE = 0.85;
-const REWORK_SHARE = 0.12, COORDINATION_SHARE = 0.1, LEAD_COST_FACTOR = 1.5, OVERTIME_SHARE = 0.2;
-const POTENTIAL_HIGH = 500, POTENTIAL_MEDIUM = 150;
-
-const tools = a.tools || [], pains = a.pains || [], areas = a.areas || [];
-const weekly = a.hours === 'unknown' ? null : PEOPLE_MID[a.people] * HOURS_MID[a.hours];
-const paperOnly = tools.length > 0 && tools.every(t => t === 'paper');
-const A = REPETITION_SHARE[a.repetition] * (paperOnly ? PAPER_ONLY_FACTOR : 1);
-const share = { min: A * RANGE_LOW, max: Math.min(MAX_SHARE, A * RANGE_HIGH) };
-const automatablePct = { min: Math.round(share.min * 100), max: Math.round(share.max * 100) };
-const load = a.hourlyCost === 'unknown' ? EMPLOYER_LOAD[a.country] : null;
-const hourlyCost = a.hourlyCost === 'unknown'
-  ? { usd: Math.round(REFERENCE_HOURLY_COST[a.country] * (load ?? 1) * 10) / 10, source: 'reference' }
-  : { usd: HOURLY_COST_MID[a.hourlyCost], source: 'visitor' };
-const currency = a.country === 'co' ? { code: 'COP', perUsd: COP_PER_USD } : { code: 'USD', perUsd: 1 };
-const mid = (r) => (r.min + r.max) / 2;
-
-let result;
-if (weekly === null) {
-  result = { version: FORMULA_VERSION, weeklyManualHours: null, automatablePct, hoursYear: null, workdays: null, fte: null,
-    hourlyCost, currency, breakdown: null, moneyYear: null, monthlyCost: null, paybackWeeks: null,
-    potential: a.repetition === 'varies' ? 'starter' : 'medium' };
-} else {
-  const P = new Set(pains);
-  const taskYear = weekly * WORK_WEEKS;
-  const reworkYear = P.has('errors') ? taskYear * REWORK_SHARE : 0;
-  const coordinationYear = a.people !== '1' ? taskYear * COORDINATION_SHARE : 0;
-  const totalYear = taskYear + reworkYear + coordinationYear;
-  const hoursYear = { min: Math.round(totalYear * share.min), max: Math.round(totalYear * share.max) };
-  const hoursMid = mid(hoursYear);
-  const surcharge = P.has('overtime') ? OVERTIME_SURCHARGE[a.country] : 0;
-  const money = (x) => Math.round((taskYear + reworkYear) * x * hourlyCost.usd
-    + coordinationYear * x * hourlyCost.usd * LEAD_COST_FACTOR + taskYear * OVERTIME_SHARE * x * hourlyCost.usd * surcharge);
-  const moneyYear = { min: money(share.min), max: money(share.max) };
-  const weeklySavings = mid(moneyYear) / WORK_WEEKS;
-  result = { version: FORMULA_VERSION, weeklyManualHours: Math.round((totalYear / WORK_WEEKS) * 10) / 10, automatablePct, hoursYear,
-    workdays: Math.round(hoursMid / HOURS_PER_WORKDAY), fte: Math.round((hoursMid / HOURS_PER_FTE_YEAR) * 10) / 10,
-    hourlyCost, currency,
-    breakdown: { taskHoursYear: Math.round(taskYear), reworkHoursYear: Math.round(reworkYear), coordinationHoursYear: Math.round(coordinationYear),
-      employerLoad: load, overtimeSurchargePct: surcharge ? Math.round(surcharge * 100) : null },
-    moneyYear, monthlyCost: Math.round(mid(moneyYear) / 12),
-    paybackWeeks: weeklySavings > 0 ? Math.max(1, Math.ceil(PILOT_USD / weeklySavings)) : null,
-    potential: hoursMid >= POTENTIAL_HIGH ? 'high' : hoursMid >= POTENTIAL_MEDIUM ? 'medium' : 'starter' };
-}
-
-// ---- qualification.ts (v2): interna, nunca se muestra al cliente
-const TIMELINE_POINTS = { 'this-month': 3, '1-3-months': 2, exploring: 0 };
-const ROLE_POINTS = { owner: 2, finance: 2, sales: 1, ops: 1, other: 0 };
-const SIZE_POINTS = { '1-10': 1, '11-50': 2, '51-200': 2, '200+': 2 };
-const volumePoints = weekly === null ? 1 : weekly >= 20 ? 3 : weekly >= 10 ? 2 : weekly >= 5 ? 1 : 0;
-const score = volumePoints + TIMELINE_POINTS[a.timeline] + Math.min(3, pains.length) + SIZE_POINTS[a.companySize]
-  + ROLE_POINTS[a.role] + (['co', 'latam', 'us', 'es'].includes(a.country) ? 1 : 0) + (tools.some(t => t !== 'paper') ? 1 : 0);
-let qualification = score >= 10 ? 'encaja' : score >= 5 ? 'dudoso' : 'no_califica';
-let qualificationReason = null;
-if (['health', 'restricted'].includes(a.sector)) { qualification = 'no_califica'; qualificationReason = 'sector restringido'; }
-
-// ---- textos (messages/es.json del website)
-const L = {
-  areas: { 'a-medida': 'Flujos a medida', contenido: 'Marketing con IA', comunicaciones: 'Comunicaciones y ventas',
-    operaciones: 'Operaciones y finanzas', diseno: 'Diseño gráfico y video', web: 'Optimización web' },
-  people: { '1': 'Solo yo', '2-3': '2-3', '4-10': '4-10', '10+': 'Más de 10' },
-  hours: { lt2: 'Menos de 2 h', '2-5': '2-5 h', '5-10': '5-10 h', '10+': 'Más de 10 h', unknown: 'No lo sé' },
-  repetition: { always: 'Sí, siempre igual', mostly: 'Casi siempre, con algunas excepciones', varies: 'Cambia bastante cada vez' },
-  tools: { sheets: 'Excel / Google Sheets', whatsapp: 'WhatsApp', email: 'Correo (Gmail / Outlook)', crm: 'CRM',
-    erp: 'ERP o contable', einvoice: 'Facturación electrónica', nocode: 'Zapier / Make / n8n', paper: 'Papel o nada digital', other: 'Otra' },
-  pains: { errors: 'Se cometen errores que hay que corregir', waiting: 'Los clientes o el equipo se quedan esperando',
-    overtime: 'Toca hacer horas extra', hiring: 'Tendríamos que contratar a alguien más' },
-  sector: { retail: 'Comercio y retail', services: 'Servicios profesionales', manufacturing: 'Manufactura y logística',
-    education: 'Educación', tech: 'Tecnología', health: 'Salud o datos médicos', restricted: 'Apuestas, cripto o adultos', other: 'Otro' },
-  companySize: { '1-10': '1-10', '11-50': '11-50', '51-200': '51-200', '200+': 'Más de 200' },
-  country: { co: 'Colombia', latam: 'Resto de Latinoamérica', us: 'EE. UU.', es: 'España', other: 'Otro' },
-  role: { owner: 'Dueño o gerente general', finance: 'Finanzas', sales: 'Comercial o marketing', ops: 'Operaciones o TI', other: 'Otro' },
-  timeline: { 'this-month': 'Lo antes posible, este mes', '1-3-months': 'En 1 a 3 meses', exploring: 'Por ahora solo estoy explorando' },
-  investment: { lt500: 'Menos de US$500', '500-1500': 'US$500-1.500', '1500-5000': 'US$1.500-5.000', '5000+': 'Más de US$5.000', unknown: 'Aún no lo sé' },
-};
-const POTENTIAL = { high: 'Alto', medium: 'Medio', starter: 'Inicial' };
-const POTENTIAL_TEXT = { high: 'Tu proceso es un gran candidato: se repite mucho y consume muchas horas.',
-  medium: 'Hay un ahorro claro y un buen punto de partida para un primer piloto.',
-  starter: 'Es un buen punto de partida: empezar por algo pequeño da resultados rápidos.' };
-const EFFECTS = { errors: 'Menos errores: los datos pasan solos de un sistema a otro, sin digitar.',
-  waiting: 'Respuestas al instante: nadie se queda esperando a que alguien tenga tiempo.',
-  overtime: 'Sin horas extra para ponerse al día con tareas repetitivas.',
-  hiring: 'Creces sin contratar a alguien solo para tareas manuales.',
-  default: 'Tu equipo dedica ese tiempo a vender, atender y hacer crecer el negocio.' };
-const PROCESS_EXAMPLES = {
-  'a-medida': ['Pasar datos entre sistemas', 'Aprobaciones internas', 'Reportes a la medida'],
-  contenido: ['Escribir posts para redes', 'Armar el newsletter', 'Fichas de producto'],
-  comunicaciones: ['Responder mensajes de WhatsApp', 'Registrar leads en el CRM', 'Seguimiento de cotizaciones'],
-  operaciones: ['Digitar facturas de proveedores', 'Conciliar pagos', 'Reportes manuales'],
-  diseno: ['Piezas para redes', 'Editar videos cortos', 'Adaptar diseños a formatos'],
-  web: ['Actualizar contenido del sitio', 'Revisar SEO y velocidad', 'Atender formularios del sitio'] };
-
-// ---- suggestions.ts
-const lists = areas.map(x => PROCESS_EXAMPLES[x] || []);
-const examples = [];
-for (let i = 0; examples.length < 4 && lists.some(l => i < l.length); i++)
-  for (const l of lists) if (l[i] && examples.length < 4 && !examples.includes(l[i])) examples.push(l[i]);
-const named = (a.process || '').trim();
-const suggestions = (named ? [named, ...examples.filter(e => e !== named)] : examples).slice(0, 3);
-
-// ---- formato
-const thousands = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-const money = (usd) => currency.code === 'COP' ? '$' + thousands(Math.round((usd * currency.perUsd) / 1000) * 1000) : 'US$' + thousands(usd);
-const pot = POTENTIAL[result.potential];
-const lines = ['📊 *Tu diagnóstico de automatización*', a.name ? '_Preparado para ' + a.name + '_' : null, ''];
-if (result.hoursYear) {
-  lines.push('Podrías recuperar *' + thousands(result.hoursYear.min) + '–' + thousands(result.hoursYear.max) + ' h al año*');
-  lines.push('💰 Ahorro estimado: *' + money(result.moneyYear.min) + ' – ' + money(result.moneyYear.max) + '* al año', '');
-  lines.push('• Potencial: *' + pot + '*');
-  lines.push('• Automatizable: *' + automatablePct.min + '–' + automatablePct.max + ' %* de la tarea');
-  lines.push('• Hoy te cuesta cerca de *' + money(result.monthlyCost) + '* al mes');
-  if (result.paybackWeeks) lines.push('• Un piloto se pagaría en *~' + result.paybackWeeks + (result.paybackWeeks === 1 ? ' semana*' : ' semanas*'));
-} else {
-  lines.push('Tu proceso tiene potencial *' + pot + '* y entre el *' + automatablePct.min + ' y ' + automatablePct.max + ' %* se puede automatizar.', '');
-  lines.push('_Como no tenías claras las horas, aún no ponemos cifras: con un asesor las medimos contigo._');
-}
-lines.push('', '_' + POTENTIAL_TEXT[result.potential] + '_');
-if (suggestions.length) { lines.push('', '*Por dónde empezaríamos*'); suggestions.forEach((s, i) => lines.push((i + 1) + '. ' + s)); }
-const effects = pains.filter(p => EFFECTS[p]).slice(0, 2).map(p => EFFECTS[p]);
-lines.push('', '*Lo que cambiaría*'); (effects.length ? effects : [EFFECTS.default]).forEach(e => lines.push('• ' + e));
-lines.push('', '_Es una estimación orientativa: la validamos contigo con tu proceso real._');
-const report = lines.filter(l => l !== null).join('\n').slice(0, 4000);
-
-const now = DateTime.now().setZone('America/Bogota');
-const diagnosisId = 'DIAG-WA-' + now.toFormat('yyyyMMdd') + '-' + String(step.diagnosis_row_id).padStart(4, '0');
-const headline = result.hoursYear
-  ? 'Potencial ' + pot + ' · ' + thousands(result.hoursYear.min) + '–' + thousands(result.hoursYear.max) + ' h/año · ' + money(result.moneyYear.min) + '–' + money(result.moneyYear.max) + '/año'
-  : 'Potencial ' + pot + ' · ' + automatablePct.min + '–' + automatablePct.max + ' % automatizable (sin horas)';
-
-return [{ json: {
-  result, score, qualification, qualificationReason, report, diagnosisId, headline, suggestions,
-  labels: {
-    areas: areas.map(x => L.areas[x] || x).join(', '), process: named, people: L.people[a.people], hours: L.hours[a.hours],
-    repetition: L.repetition[a.repetition], tools: tools.map(t => L.tools[t] || t).join(', '), pains: pains.map(p => L.pains[p]).join('; '),
-    sector: L.sector[a.sector], companySize: L.companySize[a.companySize], country: L.country[a.country], role: L.role[a.role],
-    timeline: L.timeline[a.timeline], investment: L.investment[a.investment] },
-  name: a.name || '', email: a.email || '', now: now.toFormat('yyyy-MM-dd HH:mm'), today: now.toFormat('yyyyMMdd'),
-} }];`;
+// Código del nodo «Calcular diagnóstico» (fórmula, calificación y reporte): scripts/diagnosis-calc.js
+const CALCULATE = readFileSync('scripts/diagnosis-calc.js', 'utf8');
 
 const PREPARE_ROWS = String.raw`// Why Code: ubicar a la persona en «Leads» (por teléfono), combinar su fila sin pisar lo del website
 // y armar la fila de «Diagnósticos»; todo por NOMBRE de columna.
@@ -248,12 +96,11 @@ put('Actualizado', c.now);
 const r = c.result;
 const dVals = {
   'Diagnóstico ID': c.diagnosisId, 'Lead ID': leadId, 'Fecha': c.now, 'Canal': 'WhatsApp', 'Idioma': 'ES',
-  'País': c.labels.country, 'Sector': c.labels.sector, 'Tamaño': c.labels.companySize, 'Cargo': c.labels.role,
-  'Presupuesto': c.labels.investment, 'Plazo': c.labels.timeline, 'Áreas': c.labels.areas,
+  'País': c.labels.country + ' (por indicativo)', 'Plazo': c.labels.timeline, 'Áreas': c.labels.area,
   'Horas manuales/semana': r.weeklyManualHours ?? '',
   'Ahorro anual estimado (US$)': r.moneyYear ? r.moneyYear.min + '–' + r.moneyYear.max : '',
-  'Calificación': c.qualification + (c.qualificationReason ? ' (' + c.qualificationReason + ')' : ''),
-  'Reporte': c.headline + (c.labels.process ? ' · Tarea: ' + c.labels.process : ''),
+  'Calificación': c.qualification + ' (' + c.score + '/8)',
+  'Reporte': c.headline + ' · ' + c.labels.people + ' persona(s), ' + c.labels.hours + '/semana c/u, ' + c.labels.repetition.toLowerCase(),
 };
 const dRow = dHeader.map(h => dVals[h] ?? '');
 const lastCol = (n) => String.fromCharCode(64 + n);
@@ -270,21 +117,10 @@ const QUAL = `({ encaja: '✅ Encaja', dudoso: '🟡 Dudoso', no_califica: '⛔ 
 const TELEGRAM_TEXT = `={{ [
   '📊 <b>Nuevo diagnóstico desde WhatsApp</b>',
   '',
-  '👤 <b>Nombre:</b> ' + ${esc(`${CALC}.name`)},
-  '📱 <b>WhatsApp:</b> +' + ${STEP}.wa_id + (${CALC}.email ? '  ·  ✉️ ' + ${esc(`${CALC}.email`)} : ''),
-  '🏷️ <b>Calificación:</b> ' + ${QUAL} + ' (' + ${CALC}.score + ' pts' + (${CALC}.qualificationReason ? ', ' + ${CALC}.qualificationReason : '') + ')',
-  '⚡ <b>Resultado:</b> ' + ${esc(`${CALC}.headline`)},
-  '',
-  '🧩 <b>Áreas:</b> ' + ${esc(`${CALC}.labels.areas`)},
-  '📝 <b>Tarea:</b> ' + ${esc(`${CALC}.labels.process || 'No indicó'`)},
-  '👥 ' + ${CALC}.labels.people + ' persona(s) · ' + ${CALC}.labels.hours + '/semana c/u · ' + ${esc(`${CALC}.labels.repetition`)},
-  '🛠️ <b>Herramientas:</b> ' + ${esc(`${CALC}.labels.tools`)},
-  '⚠️ <b>Cuando se atrasa:</b> ' + ${esc(`${CALC}.labels.pains || 'Nada en particular'`)},
-  '',
-  '🏢 ' + ${esc(`${CALC}.labels.sector`)} + ' · ' + ${CALC}.labels.companySize + ' personas · ' + ${esc(`${CALC}.labels.country`)},
-  '🎯 <b>Cargo:</b> ' + ${esc(`${CALC}.labels.role`)},
-  '⏱️ <b>Plazo:</b> ' + ${esc(`${CALC}.labels.timeline`)} + '  ·  💵 ' + ${esc(`${CALC}.labels.investment`)},
-  '🆔 ' + ${CALC}.diagnosisId + ' · Lead ' + ${ROWS}.leadId + (${ROWS}.isNew ? ' (nuevo)' : '')
+  '👤 <b>Nombre:</b> ' + (${esc(`${CALC}.name`)} || 'Sin nombre'),
+  '📱 <b>WhatsApp:</b> +' + ${STEP}.wa_id,
+  '🏷️ <b>Calificación:</b> ' + ${QUAL} + ' (' + ${CALC}.score + '/8)',
+  '⚡ <b>Resultado:</b> ' + ${esc(`${CALC}.headline`)}
 ].join('\\n') }}`;
 
 const wf = {
@@ -352,7 +188,7 @@ const wf = {
     set('g21', 'Respuesta: diagnóstico entregado', [3960, 200], 'ENVIADO: el usuario ya recibió su diagnóstico y los botones para seguir. No agregues texto.'),
     set('g22', 'Respuesta: sin diagnóstico', [660, 480], 'SIN_DIAGNOSTICO'),
     { id: 'note', name: 'Nota', type: 'n8n-nodes-base.stickyNote', typeVersion: 1, position: [-40, -100],
-      parameters: { width: 960, height: 320, content: '## FLOW · Diagnóstico\nEntradas: `wa_id`, `text`, `action` (`start` | `continue`).\n1. `chatbot.diagnosis_step`: mismas 14 preguntas del diagnóstico del website (+ nombre si no lo conocemos y correo opcional), con botones / listas; selección múltiple con *Agregar otra* / *Continuar*. *cancelar* lo detiene; se puede retomar dentro de 24 h.\n2. Al terminar, **Calcular diagnóstico** replica la fórmula v2 del website (`lib/assessment/report.ts`), la calificación interna (`qualification.ts`) y las sugerencias. Si cambian en el website, actualizar aquí (`scripts/diagnosis-workflow.mjs`).\n3. Envía el reporte + botones *Hablar con un asesor* / *Ver ejemplos* → Sheet: **Leads** (crea o actualiza; Etapa *Diagnosticado*, Diagnóstico ID) y **Diagnósticos** (nueva fila, Canal WhatsApp) → aviso en Telegram con la calificación.' } },
+      parameters: { width: 960, height: 320, content: '## FLOW · Diagnóstico\nEntradas: `wa_id`, `text`, `action` (`start` | `continue`).\n1. `chatbot.diagnosis_step`: diagnóstico RÁPIDO, 5 preguntas con 3 botones cada una (área, personas, horas, repetición, plazo). *cancelar* lo detiene; se puede retomar dentro de 24 h.\n2. Al terminar, **Calcular diagnóstico** (`scripts/diagnosis-calc.js`) aplica la fórmula v2 del website con rangos simplificados; el país sale del indicativo y el costo por hora es la referencia de ese país. Calificación interna simplificada (0-8).\n3. Envía el reporte + botones *Hablar con un asesor* / *Ver ejemplos* → Sheet: **Leads** (crea o actualiza; Etapa *Diagnosticado*, Diagnóstico ID) y **Diagnósticos** (nueva fila, Canal WhatsApp) → aviso en Telegram con la calificación.' } },
   ],
   connections: connect([
     ['Entrada', 'Paso (SQL)'], ['Paso (SQL)', '¿Hay mensajes?'], ['¿Hay mensajes?', 'Un item por mensaje', 0], ['¿Hay mensajes?', 'Respuesta: sin diagnóstico', 1], ['Un item por mensaje', 'Enviar mensaje'],

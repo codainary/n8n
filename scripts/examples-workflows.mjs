@@ -58,7 +58,7 @@ const REGISTER_INTERACTIVE_SQL = "SELECT r.* FROM chatbot.register_outbound(json
 
 // ============================================================ TOOL · Enviar ejemplo
 const MORE = "$('Elegir ejemplo (SQL)').first().json.remaining > 0";
-const BODY_NEXT = `(${MORE} ? '¿Quieres ver otro ejemplo o prefieres avanzar con nosotros?' : 'Ese es nuestro último ejemplo por ahora.\\n\\n¿Te gustaría avanzar con nosotros?')`;
+const BODY_NEXT = `(${MORE} ? '¿Quieres ver otro ejemplo o prefieres avanzar con nosotros?' : '¿Te gustaría avanzar con nosotros?')`;
 const BTNS_NEXT = `(${MORE} ? [ ${button('otro_ejemplo', BTN_OTRO)}, ${button('asesor', BTN_ASESOR)} ] : [ ${button('asesor', BTN_ASESOR)} ])`;
 const LABELS_NEXT = `(${MORE} ? '${BTN_OTRO} | ${BTN_ASESOR}' : '${BTN_ASESOR}')`;
 const BODY_NONE = "($('Elegir ejemplo (SQL)').first().json.total > 0 ? 'Ya viste todos nuestros ejemplos.\\n\\nSi quieres, un asesor te muestra cómo aplicarlo a *tu negocio*.' : 'Por ahora no tengo videos de ejemplo disponibles.\\n\\nUn asesor puede mostrarte casos según *tu negocio*.')";
@@ -81,6 +81,17 @@ const tool = {
     pg('t5', 'Registrar video (SQL)', [920, 120],
       "SELECT r.*, chatbot.example_sent($2, $5::int, $1) AS seen FROM chatbot.register_outbound(jsonb_build_object(\n  'wamid', $1, 'wa_id', $2, 'type', 'video', 'caption', $3,\n  'agent_text', '[Video de ejemplo enviado: ' || $4 || ']', 'raw', $6::jsonb)) r",
       "={{ [ $json.messages[0].id, $('Elegir ejemplo (SQL)').first().json.wa_id, $('Elegir ejemplo (SQL)').first().json.caption, $('Elegir ejemplo (SQL)').first().json.title, $('Elegir ejemplo (SQL)').first().json.example_id, JSON.stringify($json) ] }}"),
+    // El video pesa más que un texto: si los botones salen enseguida llegan ANTES que el video.
+    // Se espera la confirmación de entrega de Meta (status delivered/read, la registra WA · 1) cada 2 s, máx. ~20 s.
+    { id: 't5a', name: 'Esperar entrega (2 s)', type: 'n8n-nodes-base.wait', typeVersion: 1.1, position: [1020, -60],
+      webhookId: 'b3a1f6e2-7c4d-4e8a-9f21-6d5c3b2a1e09', parameters: { resume: 'timeInterval', amount: 2, unit: 'seconds' } },
+    pg('t5b', 'Estado del video (SQL)', [1240, -60],
+      "SELECT status FROM chatbot.messages WHERE wamid = $1",
+      "={{ [ $('Enviar video').first().json.messages[0].id ] }}", { alwaysOutputData: true }),
+    { id: 't5c', name: '¿Video entregado?', type: 'n8n-nodes-base.if', typeVersion: 2.2, position: [1460, -60],
+      parameters: { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 2 },
+        conditions: [{ id: 'v1', leftValue: "={{ ['delivered', 'read'].includes($json.status) || $runIndex >= 9 }}", rightValue: '',
+          operator: { type: 'boolean', operation: 'true', singleValue: true } }], combinator: 'and' }, options: {} } },
     graphJson('t6', 'Enviar botones', [1140, 120], interactive(BODY_NEXT, BTNS_NEXT)),
     pg('t7', 'Registrar botones (SQL)', [1360, 120], REGISTER_INTERACTIVE_SQL, registerInteractive(BODY_NEXT, LABELS_NEXT)),
     set('t8', 'Respuesta: enviado', [1580, 120],
@@ -100,7 +111,9 @@ const tool = {
     ['Entrada', 'Elegir ejemplo (SQL)'], ['Elegir ejemplo (SQL)', '¿Hay ejemplo por ver?'],
     ['¿Hay ejemplo por ver?', 'Enviar video', 0], ['¿Hay ejemplo por ver?', 'Avisar sin más ejemplos', 1],
     ['Enviar video', 'Registrar video (SQL)', 0], ['Enviar video', 'Invalidar video (SQL)', 1],
-    ['Registrar video (SQL)', 'Enviar botones'], ['Enviar botones', 'Registrar botones (SQL)'], ['Registrar botones (SQL)', 'Respuesta: enviado'],
+    ['Registrar video (SQL)', 'Esperar entrega (2 s)'], ['Esperar entrega (2 s)', 'Estado del video (SQL)'],
+    ['Estado del video (SQL)', '¿Video entregado?'], ['¿Video entregado?', 'Enviar botones', 0], ['¿Video entregado?', 'Esperar entrega (2 s)', 1],
+    ['Enviar botones', 'Registrar botones (SQL)'], ['Registrar botones (SQL)', 'Respuesta: enviado'],
     ['Invalidar video (SQL)', 'Respuesta: no enviado'],
     ['Avisar sin más ejemplos', 'Registrar aviso (SQL)'], ['Registrar aviso (SQL)', 'Respuesta: sin más'],
   ]),

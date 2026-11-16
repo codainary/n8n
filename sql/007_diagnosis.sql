@@ -1,6 +1,6 @@
 -- ==========================================================================
--- Diagnóstico de automatización por WhatsApp (réplica del diagnóstico del website,
--- automaverso-web: lib/assessment/options.ts + components/sections/assessment/screens.ts).
+-- Diagnóstico RÁPIDO de automatización por WhatsApp: 5 preguntas con botones. Usa la fórmula v2 del
+-- website (automaverso-web: lib/assessment/report.ts) con rangos simplificados.
 -- Motor de preguntas por número: cada paso devuelve los mensajes a enviar (texto, botones o lista).
 -- El cálculo (fórmula v2) y la calificación se hacen en «FLOW · Diagnóstico» al terminar.
 -- Idempotente.
@@ -28,64 +28,26 @@ CREATE TABLE IF NOT EXISTS chatbot.diagnoses (
 CREATE UNIQUE INDEX IF NOT EXISTS diagnoses_one_active ON chatbot.diagnoses (wa_id) WHERE status = 'active';
 
 -- --------------------------------------------------------------------------
--- Catálogo de preguntas (mismo orden y opciones que el website; títulos ≤ 24 caracteres
--- para listas y ≤ 20 para botones, límites de WhatsApp).
--- kind: single | multi | process | text | email ; ui: buttons | list
+-- Catálogo de preguntas: diagnóstico RÁPIDO por WhatsApp (5 preguntas, todas con 2-3 botones,
+-- títulos ≤ 20 caracteres). El país se deduce del indicativo del WhatsApp y el costo por hora es la
+-- referencia del website para ese país (ver «Calcular diagnóstico» en FLOW · Diagnóstico).
+-- kind: single ; ui: buttons
 -- --------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION chatbot.diag_questions() RETURNS jsonb
 LANGUAGE sql IMMUTABLE AS $$
 SELECT $j$[
- {"key":"areas","kind":"multi","ui":"list","body":"¿En qué parte de tu negocio se te va *más tiempo*?","options":[
-   {"code":"a-medida","title":"Flujos a medida","desc":"Pasar datos entre sistemas, aprobaciones, reportes"},
-   {"code":"contenido","title":"Marketing con IA","desc":"Posts, newsletters, fichas de producto"},
-   {"code":"comunicaciones","title":"Comunicaciones y ventas","desc":"WhatsApp, CRM, seguimiento de clientes"},
-   {"code":"operaciones","title":"Operaciones y finanzas","desc":"Facturas, pagos, inventario, reportes"},
-   {"code":"diseno","title":"Diseño gráfico y video","desc":"Piezas para redes, videos cortos"},
-   {"code":"web","title":"Optimización web","desc":"Contenido del sitio, SEO, formularios"}]},
- {"key":"process","kind":"process","ui":"list","body":"¿Qué *tarea* te gustaría no volver a hacer a mano?"},
- {"key":"people","kind":"single","ui":"list","body":"¿Cuántas *personas* se encargan de esa tarea?","options":[
-   {"code":"1","title":"Solo yo"},{"code":"2-3","title":"2 a 3"},{"code":"4-10","title":"4 a 10"},{"code":"10+","title":"Más de 10"}]},
- {"key":"hours","kind":"single","ui":"list","body":"Más o menos, ¿cuántas *horas a la semana* le dedica cada una?\n\n_Un cálculo aproximado basta._","options":[
-   {"code":"lt2","title":"Menos de 2 h"},{"code":"2-5","title":"2 a 5 h"},{"code":"5-10","title":"5 a 10 h"},
-   {"code":"10+","title":"Más de 10 h"},{"code":"unknown","title":"No lo sé"}]},
- {"key":"repetition","kind":"single","ui":"buttons","body":"¿Esa tarea se hace *casi siempre igual*?\n\n_Mientras más se repite, más se puede automatizar._","options":[
+ {"key":"area","kind":"single","ui":"buttons","body":"¿En qué parte de tu negocio se te va *más tiempo*?","options":[
+   {"code":"comunicaciones","title":"Atención y ventas"},
+   {"code":"operaciones","title":"Operaciones/finanzas"},
+   {"code":"contenido","title":"Marketing/contenido"}]},
+ {"key":"people","kind":"single","ui":"buttons","body":"¿Cuántas *personas* se encargan de esas tareas?","options":[
+   {"code":"1","title":"Solo yo"},{"code":"2-5","title":"2 a 5"},{"code":"5+","title":"Más de 5"}]},
+ {"key":"hours","kind":"single","ui":"buttons","body":"Más o menos, ¿cuántas *horas a la semana* les dedica cada una?","options":[
+   {"code":"lt5","title":"Menos de 5 h"},{"code":"5-10","title":"5 a 10 h"},{"code":"10+","title":"Más de 10 h"}]},
+ {"key":"repetition","kind":"single","ui":"buttons","body":"¿Esas tareas se hacen *casi siempre igual*?\n\n_Mientras más se repiten, más se pueden automatizar._","options":[
    {"code":"always","title":"Siempre igual"},{"code":"mostly","title":"Casi siempre"},{"code":"varies","title":"Cambia bastante"}]},
- {"key":"tools","kind":"multi","ui":"list","body":"¿Con qué *herramientas* la hacen hoy?","options":[
-   {"code":"sheets","title":"Excel / Google Sheets"},{"code":"whatsapp","title":"WhatsApp"},
-   {"code":"email","title":"Correo","desc":"Gmail, Outlook"},{"code":"crm","title":"CRM"},
-   {"code":"erp","title":"ERP o contable","desc":"Odoo, SAP, Siigo, Alegra, QuickBooks"},
-   {"code":"einvoice","title":"Facturación electrónica"},{"code":"nocode","title":"Zapier / Make / n8n"},
-   {"code":"paper","title":"Papel o nada digital"},{"code":"other","title":"Otra herramienta"}]},
- {"key":"country","kind":"single","ui":"list","body":"¿Dónde *opera* tu empresa?","options":[
-   {"code":"co","title":"Colombia"},{"code":"latam","title":"Resto de Latinoamérica"},{"code":"us","title":"EE. UU."},
-   {"code":"es","title":"España"},{"code":"other","title":"Otro país"}]},
- {"key":"hourlyCost","kind":"single","ui":"list","body":"¿Cuánto cuesta, más o menos, *una hora* de esa persona?\n\n_Sueldo y prestaciones entre las horas del mes._","options":[
-   {"code":"lt5","title":"Menos de US$5","title_co":"Menos de $20.000"},{"code":"5-10","title":"US$5 a 10","title_co":"$20.000 a 40.000"},
-   {"code":"10-20","title":"US$10 a 20","title_co":"$40.000 a 80.000"},{"code":"20-40","title":"US$20 a 40","title_co":"$80.000 a 160.000"},
-   {"code":"40+","title":"Más de US$40","title_co":"Más de $160.000"},{"code":"unknown","title":"Prefiero no decirlo"}]},
- {"key":"pains","kind":"multi","ui":"list","body":"¿Qué pasa cuando esa tarea *se atrasa*?","options":[
-   {"code":"errors","title":"Errores por corregir","desc":"Se cometen errores que hay que corregir"},
-   {"code":"waiting","title":"Gente esperando","desc":"Los clientes o el equipo se quedan esperando"},
-   {"code":"overtime","title":"Horas extra","desc":"Toca hacer horas extra"},
-   {"code":"hiring","title":"Contratar a alguien","desc":"Tendríamos que contratar a alguien más"},
-   {"code":"none","title":"Ninguna de estas","terminal":true}]},
- {"key":"sector","kind":"single","ui":"list","body":"¿A qué se dedica tu *empresa*?","options":[
-   {"code":"retail","title":"Comercio y retail"},{"code":"services","title":"Servicios profesionales"},
-   {"code":"manufacturing","title":"Manufactura y logística"},{"code":"education","title":"Educación"},
-   {"code":"tech","title":"Tecnología"},{"code":"health","title":"Salud o datos médicos"},
-   {"code":"restricted","title":"Apuestas/cripto/adultos"},{"code":"other","title":"Otro sector"}]},
- {"key":"companySize","kind":"single","ui":"list","body":"¿Cuántas personas *trabajan en total* en la empresa?","options":[
-   {"code":"1-10","title":"1 a 10"},{"code":"11-50","title":"11 a 50"},{"code":"51-200","title":"51 a 200"},{"code":"200+","title":"Más de 200"}]},
- {"key":"role","kind":"single","ui":"list","body":"¿Y tú qué *papel* tienes ahí?","options":[
-   {"code":"owner","title":"Dueño o gerente general"},{"code":"finance","title":"Finanzas"},
-   {"code":"sales","title":"Comercial o marketing"},{"code":"ops","title":"Operaciones o TI"},{"code":"other","title":"Otro cargo"}]},
- {"key":"timeline","kind":"single","ui":"buttons","body":"¿Para cuándo te gustaría *quitarte esto de encima*?","options":[
-   {"code":"this-month","title":"Este mes"},{"code":"1-3-months","title":"En 1 a 3 meses"},{"code":"exploring","title":"Solo explorando"}]},
- {"key":"investment","kind":"single","ui":"list","body":"¿Qué *inversión* tienes en mente para empezar?\n\n_Un primer piloto suele estar entre US$500 y US$1.500. Es solo una referencia._","options":[
-   {"code":"lt500","title":"Menos de US$500"},{"code":"500-1500","title":"US$500 a 1.500"},{"code":"1500-5000","title":"US$1.500 a 5.000"},
-   {"code":"5000+","title":"Más de US$5.000"},{"code":"unknown","title":"Aún no lo sé"}]},
- {"key":"name","kind":"text","body":"¿Cuál es tu *nombre* o el de tu empresa?"},
- {"key":"email","kind":"email","ui":"buttons","body":"¿Nos dejas tu *correo*? Así el asesor también puede escribirte por ahí.\n\n_Es opcional._","options":[{"code":"skip","title":"Omitir"}]}
+ {"key":"timeline","kind":"single","ui":"buttons","body":"Última: ¿para cuándo te gustaría *resolverlo*?","options":[
+   {"code":"this-month","title":"Este mes"},{"code":"1-3-months","title":"En 1 a 3 meses"},{"code":"exploring","title":"Solo explorando"}]}
 ]$j$::jsonb
 $$;
 
@@ -207,7 +169,12 @@ BEGIN
   UPDATE diagnoses SET status = 'expired', updated_at = now()
    WHERE wa_id = p_wa_id AND status = 'active' AND updated_at <= now() - interval '24 hours';
 
-  IF p_action = 'start' THEN
+  -- Pedir de nuevo el diagnóstico (botón o texto) con uno en curso lo reinicia, no cuenta como respuesta.
+  -- También se reinicia si el diagnóstico activo es de un formato anterior (su paso ya no existe).
+  IF p_action = 'start'
+     OR v_norm IN ('diagnostico gratis', 'diagnostico', 'hacer el diagnostico', 'quiero el diagnostico')
+     OR EXISTS (SELECT 1 FROM diagnoses x WHERE x.wa_id = p_wa_id AND x.status = 'active'
+                   AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(diag_questions()) q WHERE q->>'key' = x.step)) THEN
     UPDATE diagnoses SET status = 'cancelled', updated_at = now() WHERE wa_id = p_wa_id AND status = 'active';
     -- Nombre ya conocido (solicitud de asesor o diagnóstico anterior)
     SELECT n INTO v_name FROM (
@@ -215,10 +182,10 @@ BEGIN
       UNION ALL SELECT answers->>'name', updated_at FROM diagnoses WHERE wa_id = p_wa_id AND answers->>'name' IS NOT NULL) x
      ORDER BY updated_at DESC LIMIT 1;
     v_ans := CASE WHEN v_name IS NOT NULL THEN jsonb_build_object('known_name', v_name, 'name', v_name) ELSE '{}'::jsonb END;
-    INSERT INTO diagnoses (wa_id, step, answers) VALUES (p_wa_id, 'areas', v_ans) RETURNING * INTO d;
+    INSERT INTO diagnoses (wa_id, step, answers) VALUES (p_wa_id, 'area', v_ans) RETURNING * INTO d;
     v_out := jsonb_build_array(jsonb_build_object('type', 'text', 'body',
-      E'¡Vamos! Son *' || array_length(diag_keys(v_ans), 1) || E' preguntas rápidas*, casi todas con botones.\n\nAl final te muestro *cuánto tiempo y dinero* podrías ahorrar automatizando.\n\n_Escribe *cancelar* cuando quieras._'))
-      || diag_render('areas', v_ans);
+      E'¡Vamos! Son solo *' || array_length(diag_keys(v_ans), 1) || E' preguntas* con botones.\n\nAl final te muestro *cuánto tiempo y dinero* podrías ahorrar automatizando.'))
+      || diag_render('area', v_ans);
     RETURN QUERY SELECT d.id, false, v_out, d.answers;
     RETURN;
   END IF;

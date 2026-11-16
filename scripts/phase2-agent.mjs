@@ -19,7 +19,7 @@ Eres el asistente virtual de Automaverso en WhatsApp. Automaverso S.A.S. (Barran
 
 # Qué ofrece Automaverso (tu alcance)
 - Servicios: Flujos a medida (integraciones entre sistemas), Marketing con IA, Comunicaciones y ventas (WhatsApp, CRM, seguimiento), Operaciones y finanzas (facturas, conciliación, inventario, reportes), Diseño gráfico y video, Optimización web.
-- Cómo se empieza: diagnóstico gratis aquí mismo por WhatsApp (unas 15 preguntas rápidas con botones), conversación con un asesor y un piloto de un proceso.
+- Cómo se empieza: diagnóstico gratis aquí mismo por WhatsApp (5 preguntas rápidas con botones), conversación con un asesor y un piloto de un proceso.
 - Contacto oficial: hello@automaverso.com · automaverso.com
 Para cualquier detalle (precios, plazos, condiciones, políticas, promociones) la fuente es SIEMPRE la herramienta consultar_base_conocimiento, no este resumen.
 
@@ -86,7 +86,7 @@ Cuando el usuario escriba (o pulse) exactamente una de estas opciones:
 - El diagnóstico se hace AQUÍ, por WhatsApp. Nunca mandes al usuario a hacerlo en el sitio web.
 - Si el usuario quiere el diagnóstico, saber cuánto podría ahorrar o evaluar qué automatizar en su negocio, llama a iniciar_diagnostico. Las preguntas y el resultado se envían solos.
 - Si responde ENVIADO, tu respuesta debe ser exactamente: [EJEMPLO_ENVIADO]
-- Si te preguntan qué es: son unas 15 preguntas rápidas (casi todas con botones) y al final recibe cuántas horas y cuánto dinero podría ahorrar al año, el potencial de automatización y por dónde empezar. Es gratis y sin compromiso.`;
+- Si te preguntan qué es: son 5 preguntas rápidas con botones (toma menos de un minuto) y al final recibe cuántas horas y cuánto dinero podría ahorrar al año, el potencial de automatización y por dónde empezar. Es gratis y sin compromiso.`;
 
 const TOPIC_PROMPT = `You are a content analysis system that determines if a WhatsApp message to a company assistant stays on topic.
 
@@ -461,7 +461,7 @@ link('Iniciar diagnóstico', 'Cerrar ráfaga (SQL)');
 upsertNode({
   id: 'tdg', name: 'iniciar_diagnostico', type: '@n8n/n8n-nodes-langchain.toolWorkflow', typeVersion: 2.2, position: [ax + 700, ay + 220],
   parameters: {
-    description: 'Inicia el diagnóstico gratis de automatización por WhatsApp: unas 15 preguntas con botones y listas que se envían solas y, al final, el resultado (horas y dinero que podría ahorrar, potencial y por dónde empezar). Úsala cuando el usuario quiera el diagnóstico, saber cuánto podría ahorrar o evaluar qué automatizar. Devuelve ENVIADO.',
+    description: 'Inicia el diagnóstico gratis de automatización por WhatsApp: 5 preguntas con botones que se envían solas y, al final, el resultado (horas y dinero que podría ahorrar, potencial y por dónde empezar). Úsala cuando el usuario quiera el diagnóstico, saber cuánto podría ahorrar o evaluar qué automatizar. Devuelve ENVIADO.',
     workflowId: { __rl: true, mode: 'id', value: DIAG_WF_ID },
     workflowInputs: dgInputs('', 'start'),
   },

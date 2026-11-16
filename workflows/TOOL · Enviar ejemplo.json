@@ -144,6 +144,83 @@
       }
     },
     {
+      "id": "t5a",
+      "name": "Esperar entrega (2 s)",
+      "webhookId": "b3a1f6e2-7c4d-4e8a-9f21-6d5c3b2a1e09",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1020,
+        -60
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 2,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "t5b",
+      "name": "Estado del video (SQL)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "position": [
+        1240,
+        -60
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT status FROM chatbot.messages WHERE wamid = $1",
+        "options": {
+          "queryReplacement": "={{ [ $('Enviar video').first().json.messages[0].id ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      }
+    },
+    {
+      "id": "t5c",
+      "name": "¿Video entregado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1460,
+        -60
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "v1",
+              "leftValue": "={{ ['delivered', 'read'].includes($json.status) || $runIndex >= 9 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
       "id": "t6",
       "name": "Enviar botones",
       "type": "n8n-nodes-base.httpRequest",
@@ -162,7 +239,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Elegir ejemplo (SQL)').first().json.wa_id, type: 'interactive', interactive: { type: 'button', body: { text: ($('Elegir ejemplo (SQL)').first().json.remaining > 0 ? '¿Quieres ver otro ejemplo o prefieres avanzar con nosotros?' : 'Ese es nuestro último ejemplo por ahora.\\n\\n¿Te gustaría avanzar con nosotros?') }, action: { buttons: ($('Elegir ejemplo (SQL)').first().json.remaining > 0 ? [ { type: 'reply', reply: { id: 'otro_ejemplo', title: 'Ver otro ejemplo' } }, { type: 'reply', reply: { id: 'asesor', title: 'Hablar con un asesor' } } ] : [ { type: 'reply', reply: { id: 'asesor', title: 'Hablar con un asesor' } } ]) } } }) }}",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Elegir ejemplo (SQL)').first().json.wa_id, type: 'interactive', interactive: { type: 'button', body: { text: ($('Elegir ejemplo (SQL)').first().json.remaining > 0 ? '¿Quieres ver otro ejemplo o prefieres avanzar con nosotros?' : '¿Te gustaría avanzar con nosotros?') }, action: { buttons: ($('Elegir ejemplo (SQL)').first().json.remaining > 0 ? [ { type: 'reply', reply: { id: 'otro_ejemplo', title: 'Ver otro ejemplo' } }, { type: 'reply', reply: { id: 'asesor', title: 'Hablar con un asesor' } } ] : [ { type: 'reply', reply: { id: 'asesor', title: 'Hablar con un asesor' } } ]) } } }) }}",
         "options": {}
       },
       "credentials": {
@@ -188,7 +265,7 @@
         "operation": "executeQuery",
         "query": "SELECT r.* FROM chatbot.register_outbound(jsonb_build_object(\n  'wamid', $1, 'wa_id', $2, 'type', 'interactive', 'text', $3,\n  'agent_text', $3 || E'\\n[Botones: ' || $4 || ']')) r",
         "options": {
-          "queryReplacement": "={{ [ $json.messages[0].id, $('Elegir ejemplo (SQL)').first().json.wa_id, ($('Elegir ejemplo (SQL)').first().json.remaining > 0 ? '¿Quieres ver otro ejemplo o prefieres avanzar con nosotros?' : 'Ese es nuestro último ejemplo por ahora.\\n\\n¿Te gustaría avanzar con nosotros?'), ($('Elegir ejemplo (SQL)').first().json.remaining > 0 ? 'Ver otro ejemplo | Hablar con un asesor' : 'Hablar con un asesor') ] }}"
+          "queryReplacement": "={{ [ $json.messages[0].id, $('Elegir ejemplo (SQL)').first().json.wa_id, ($('Elegir ejemplo (SQL)').first().json.remaining > 0 ? '¿Quieres ver otro ejemplo o prefieres avanzar con nosotros?' : '¿Te gustaría avanzar con nosotros?'), ($('Elegir ejemplo (SQL)').first().json.remaining > 0 ? 'Ver otro ejemplo | Hablar con un asesor' : 'Hablar con un asesor') ] }}"
         }
       },
       "credentials": {
@@ -427,7 +504,47 @@
       "main": [
         [
           {
+            "node": "Esperar entrega (2 s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar entrega (2 s)": {
+      "main": [
+        [
+          {
+            "node": "Estado del video (SQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Estado del video (SQL)": {
+      "main": [
+        [
+          {
+            "node": "¿Video entregado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Video entregado?": {
+      "main": [
+        [
+          {
             "node": "Enviar botones",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Esperar entrega (2 s)",
             "type": "main",
             "index": 0
           }
