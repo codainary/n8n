@@ -1,7 +1,5 @@
 {
-  "id": "22QxZnJGhImy7Dmg",
   "name": "FLOW · Diagnóstico",
-  "active": true,
   "nodes": [
     {
       "id": "g1",
@@ -37,24 +35,24 @@
       "name": "Paso (SQL)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 1000,
       "position": [
         220,
         300
       ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      },
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT s.*, $1::text AS wa_id, chatbot.config('wa_phone_number_id') AS phone_number_id,\n       chatbot.config('leads_sheet_id') AS sheet_id, chatbot.config('telegram_leads_chat_id') AS telegram_chat_id,\n       chatbot.known_lead_id($1) AS known_lead_id\n  FROM (SELECT 1) x LEFT JOIN LATERAL chatbot.diagnosis_step($1, $2, $3) s ON true",
         "options": {
           "queryReplacement": "={{ [ $json.wa_id, $json.text || '', $json.action || 'continue' ] }}"
-        }
-      },
-      "credentials": {
-        "postgres": {
-          "id": "aV6poYyo4OBcJu8E",
-          "name": "Postgres VPS (chatbot)"
         }
       }
     },
@@ -111,13 +109,19 @@
       "name": "Enviar mensaje",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
       "position": [
         660,
         300
       ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "30aSXJ9QwShLDa9s",
+          "name": "WhatsApp Graph API (Bearer)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
       "parameters": {
         "method": "POST",
         "url": "=https://graph.facebook.com/v23.0/{{ $('Paso (SQL)').first().json.phone_number_id }}/messages",
@@ -127,12 +131,6 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.type === 'text'\n  ? { messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Paso (SQL)').first().json.wa_id, type: 'text', text: { preview_url: false, body: $json.body } }\n  : $json.type === 'buttons'\n    ? { messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Paso (SQL)').first().json.wa_id, type: 'interactive', interactive: { type: 'button', body: { text: $json.body }, ...($json.footer ? { footer: { text: $json.footer } } : {}), action: { buttons: $json.buttons.map(b => ({ type: 'reply', reply: { id: b.id, title: b.title } })) } } }\n    : { messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Paso (SQL)').first().json.wa_id, type: 'interactive', interactive: { type: 'list', body: { text: $json.body }, ...($json.footer ? { footer: { text: $json.footer } } : {}), action: { button: $json.button || 'Ver opciones', sections: [ { title: 'Opciones', rows: $json.rows.map(r => ({ id: r.id, title: r.title, ...(r.description ? { description: r.description } : {}) })) } ] } } }) }}",
         "options": {}
-      },
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "30aSXJ9QwShLDa9s",
-          "name": "WhatsApp Graph API (Bearer)"
-        }
       }
     },
     {
@@ -140,24 +138,24 @@
       "name": "Registrar mensaje (SQL)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 1000,
       "position": [
         880,
         300
       ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      },
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT r.* FROM chatbot.register_outbound(jsonb_build_object(\n  'wamid', $1, 'wa_id', $2, 'type', $3, 'text', $4, 'agent_text', $5)) r",
         "options": {
           "queryReplacement": "={{ [ $json.messages[0].id, $('Paso (SQL)').first().json.wa_id, $('Un item por mensaje').item.json.type === 'text' ? 'text' : 'interactive', $('Un item por mensaje').item.json.body, (() => { const j = $('Un item por mensaje').item.json; return j.body + (j.buttons ? '\\n[Botones: ' + j.buttons.map(b => b.title).join(' | ') + ']' : '') + (j.rows ? '\\n[Lista: ' + j.rows.map(r => r.title).join(' | ') + ']' : ''); })() ] }}"
-        }
-      },
-      "credentials": {
-        "postgres": {
-          "id": "aV6poYyo4OBcJu8E",
-          "name": "Postgres VPS (chatbot)"
         }
       }
     },
@@ -247,45 +245,22 @@
     },
     {
       "id": "g10",
-      "name": "Enviar reporte",
+      "name": "Enviar reporte con botones",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
       "position": [
         1760,
         200
       ],
-      "parameters": {
-        "method": "POST",
-        "url": "=https://graph.facebook.com/v23.0/{{ $('Paso (SQL)').first().json.phone_number_id }}/messages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Paso (SQL)').first().json.wa_id, type: 'text', text: { preview_url: false, body: $json.report } }) }}",
-        "options": {}
-      },
       "credentials": {
         "httpHeaderAuth": {
           "id": "30aSXJ9QwShLDa9s",
           "name": "WhatsApp Graph API (Bearer)"
         }
-      }
-    },
-    {
-      "id": "g11",
-      "name": "Enviar siguientes pasos",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      },
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000,
-      "position": [
-        1980,
-        200
-      ],
       "parameters": {
         "method": "POST",
         "url": "=https://graph.facebook.com/v23.0/{{ $('Paso (SQL)').first().json.phone_number_id }}/messages",
@@ -293,14 +268,8 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Paso (SQL)').first().json.wa_id, type: 'interactive', interactive: { type: 'button', body: { text: '¿Cómo quieres seguir?\\n\\n_Las dos opciones son gratis y sin compromiso._' }, action: { buttons: [ { type: 'reply', reply: { id: 'asesor', title: 'Hablar con un asesor' } }, { type: 'reply', reply: { id: 'ejemplos', title: 'Ver ejemplos' } } ] } } }) }}",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Paso (SQL)').first().json.wa_id, type: 'interactive', interactive: { type: 'button', body: { text: ($json.report + '\\n\\n*¿Cómo quieres seguir?*').slice(0, 1024) }, footer: { text: 'Gratis y sin compromiso' }, action: { buttons: [ { type: 'reply', reply: { id: 'asesor', title: 'Hablar con un asesor' } }, { type: 'reply', reply: { id: 'ejemplos', title: 'Ver ejemplos' } } ] } } }) }}",
         "options": {}
-      },
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "30aSXJ9QwShLDa9s",
-          "name": "WhatsApp Graph API (Bearer)"
-        }
       }
     },
     {
@@ -308,24 +277,24 @@
       "name": "Registrar reporte (SQL)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
+      "position": [
+        1980,
+        200
+      ],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 1000,
-      "position": [
-        2200,
-        200
-      ],
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT (SELECT message_id FROM chatbot.register_outbound(jsonb_build_object('wamid', $1, 'wa_id', $3, 'type', 'text', 'text', $4))) AS report_msg,\n       (SELECT message_id FROM chatbot.register_outbound(jsonb_build_object('wamid', $2, 'wa_id', $3, 'type', 'interactive',\n          'text', '¿Cómo quieres seguir?', 'agent_text', '¿Cómo quieres seguir? [Botones: Hablar con un asesor | Ver ejemplos]'))) AS buttons_msg",
-        "options": {
-          "queryReplacement": "={{ [ $('Enviar reporte').first().json.messages[0].id, $json.messages[0].id, $('Paso (SQL)').first().json.wa_id, $('Calcular diagnóstico').first().json.report ] }}"
-        }
-      },
       "credentials": {
         "postgres": {
           "id": "aV6poYyo4OBcJu8E",
           "name": "Postgres VPS (chatbot)"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT r.message_id AS report_msg FROM chatbot.register_outbound(jsonb_build_object('wamid', $1, 'wa_id', $2, 'type', 'interactive',\n  'text', $3, 'agent_text', $3 || E'\\n\\n¿Cómo quieres seguir? [Botones: Hablar con un asesor | Ver ejemplos]')) r",
+        "options": {
+          "queryReplacement": "={{ [ $json.messages[0].id, $('Paso (SQL)').first().json.wa_id, $('Calcular diagnóstico').first().json.report ] }}"
         }
       }
     },
@@ -334,24 +303,24 @@
       "name": "Leer Sheet (Leads + Diagnósticos)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
       "position": [
         2420,
         200
       ],
-      "parameters": {
-        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Paso (SQL)').first().json.sheet_id }}/values:batchGet?ranges=Leads!A1:Z&ranges={{ encodeURIComponent('Diagnósticos!A1:Z1') }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleApi",
-        "options": {}
-      },
       "credentials": {
         "googleApi": {
           "id": "7rT6HnkbOiymsTAt",
           "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
         }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Paso (SQL)').first().json.sheet_id }}/values:batchGet?ranges=Leads!A1:Z&ranges={{ encodeURIComponent('Diagnósticos!A1:Z1') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {}
       }
     },
     {
@@ -406,14 +375,20 @@
       "name": "Agregar lead (Sheets)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
-      "onError": "continueRegularOutput",
       "position": [
         3080,
         100
       ],
+      "credentials": {
+        "googleApi": {
+          "id": "7rT6HnkbOiymsTAt",
+          "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
       "parameters": {
         "method": "POST",
         "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Paso (SQL)').first().json.sheet_id }}/values/{{ encodeURIComponent($json.leadRange) }}:append?valueInputOption=RAW&insertDataOption=OVERWRITE",
@@ -423,12 +398,6 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ values: [ $json.row ] }) }}",
         "options": {}
-      },
-      "credentials": {
-        "googleApi": {
-          "id": "7rT6HnkbOiymsTAt",
-          "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
-        }
       }
     },
     {
@@ -436,14 +405,20 @@
       "name": "Actualizar lead (Sheets)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
-      "onError": "continueRegularOutput",
       "position": [
         3080,
         300
       ],
+      "credentials": {
+        "googleApi": {
+          "id": "7rT6HnkbOiymsTAt",
+          "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
       "parameters": {
         "method": "PUT",
         "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Paso (SQL)').first().json.sheet_id }}/values/{{ encodeURIComponent($json.leadRange) }}?valueInputOption=RAW",
@@ -453,12 +428,6 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ values: [ $json.row ] }) }}",
         "options": {}
-      },
-      "credentials": {
-        "googleApi": {
-          "id": "7rT6HnkbOiymsTAt",
-          "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
-        }
       }
     },
     {
@@ -466,14 +435,20 @@
       "name": "Agregar diagnóstico (Sheets)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
-      "onError": "continueRegularOutput",
       "position": [
         3300,
         200
       ],
+      "credentials": {
+        "googleApi": {
+          "id": "7rT6HnkbOiymsTAt",
+          "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
       "parameters": {
         "method": "POST",
         "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Paso (SQL)').first().json.sheet_id }}/values/{{ encodeURIComponent($('Preparar filas').first().json.diagRange) }}:append?valueInputOption=RAW&insertDataOption=OVERWRITE",
@@ -483,12 +458,6 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ values: [ $('Preparar filas').first().json.dRow ] }) }}",
         "options": {}
-      },
-      "credentials": {
-        "googleApi": {
-          "id": "7rT6HnkbOiymsTAt",
-          "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
-        }
       }
     },
     {
@@ -496,14 +465,20 @@
       "name": "Avisar en Telegram",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
-      "onError": "continueRegularOutput",
       "position": [
         3520,
         200
       ],
+      "credentials": {
+        "telegramApi": {
+          "id": "T2kzKYa0lIBPkI9c",
+          "name": "Telegram Leads (automaversosas_bot)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
       "parameters": {
         "resource": "message",
         "operation": "sendMessage",
@@ -543,38 +518,31 @@
           "disable_web_page_preview": true,
           "appendAttribution": false
         }
-      },
-      "credentials": {
-        "telegramApi": {
-          "id": "T2kzKYa0lIBPkI9c",
-          "name": "Telegram Leads (automaversosas_bot)"
-        }
-      },
-      "webhookId": "f553dca3-caae-4ccd-b11b-91b41900f026"
+      }
     },
     {
       "id": "g20",
       "name": "Guardar resultado (SQL)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 1000,
       "position": [
         3740,
         200
       ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      },
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT chatbot.diagnosis_saved($1::int, $2::jsonb, $3, $4::int, $5, $6, NULLIF($7, '')::bigint, $8) AS ok",
         "options": {
           "queryReplacement": "={{ [ $('Paso (SQL)').first().json.diagnosis_row_id, JSON.stringify($('Calcular diagnóstico').first().json.result), $('Calcular diagnóstico').first().json.qualification, $('Calcular diagnóstico').first().json.score, $('Calcular diagnóstico').first().json.diagnosisId, $('Preparar filas').first().json.leadId, String($json.result?.message_id || $json.message_id || ''), ($json.result?.message_id || $json.message_id) ? '' : JSON.stringify($json.error || $json).slice(0, 500) ] }}"
-        }
-      },
-      "credentials": {
-        "postgres": {
-          "id": "aV6poYyo4OBcJu8E",
-          "name": "Postgres VPS (chatbot)"
         }
       }
     },
@@ -656,6 +624,24 @@
       "main": [
         [
           {
+            "node": "¿Diagnóstico completo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Diagnóstico completo?": {
+      "main": [
+        [
+          {
+            "node": "Calcular diagnóstico",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "¿Hay mensajes?",
             "type": "main",
             "index": 0
@@ -718,24 +704,6 @@
       "main": [
         [
           {
-            "node": "¿Diagnóstico completo?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "¿Diagnóstico completo?": {
-      "main": [
-        [
-          {
-            "node": "Calcular diagnóstico",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
             "node": "Respuesta: paso enviado",
             "type": "main",
             "index": 0
@@ -747,25 +715,14 @@
       "main": [
         [
           {
-            "node": "Enviar reporte",
+            "node": "Enviar reporte con botones",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Enviar reporte": {
-      "main": [
-        [
-          {
-            "node": "Enviar siguientes pasos",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Enviar siguientes pasos": {
+    "Enviar reporte con botones": {
       "main": [
         [
           {
@@ -884,12 +841,10 @@
     }
   },
   "settings": {
+    "executionOrder": "v1",
     "saveDataErrorExecution": "all",
     "saveDataSuccessExecution": "all",
-    "timezone": "America/Bogota",
-    "executionOrder": "v1"
+    "timezone": "America/Bogota"
   },
-  "pinData": null,
-  "staticData": null,
-  "tags": []
+  "id": "22QxZnJGhImy7Dmg"
 }

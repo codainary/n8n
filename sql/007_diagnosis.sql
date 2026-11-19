@@ -183,9 +183,9 @@ BEGIN
      ORDER BY updated_at DESC LIMIT 1;
     v_ans := CASE WHEN v_name IS NOT NULL THEN jsonb_build_object('known_name', v_name, 'name', v_name) ELSE '{}'::jsonb END;
     INSERT INTO diagnoses (wa_id, step, answers) VALUES (p_wa_id, 'area', v_ans) RETURNING * INTO d;
-    v_out := jsonb_build_array(jsonb_build_object('type', 'text', 'body',
-      E'¡Vamos! Son solo *' || array_length(diag_keys(v_ans), 1) || E' preguntas* con botones.\n\nAl final te muestro *cuánto tiempo y dinero* podrías ahorrar automatizando.'))
-      || diag_render('area', v_ans);
+    -- Introducción y primera pregunta en UN solo mensaje: dos mensajes seguidos pueden llegar en desorden.
+    v_out := diag_render('area', v_ans,
+      E'¡Vamos! Son solo *' || array_length(diag_keys(v_ans), 1) || E' preguntas* con botones. Al final te muestro *cuánto tiempo y dinero* podrías ahorrar automatizando.');
     RETURN QUERY SELECT d.id, false, v_out, d.answers;
     RETURN;
   END IF;
@@ -299,7 +299,7 @@ BEGIN
     IF v_next IS NULL THEN
       UPDATE diagnoses SET answers = v_ans, step = 'done', sub = NULL, status = 'done', completed_at = now(), updated_at = now() WHERE id = d.id;
       v_done := true;
-      v_out := jsonb_build_array(jsonb_build_object('type', 'text', 'body', '¡Listo! Estoy preparando tu diagnóstico… ⏳'));
+      v_out := '[]'::jsonb;   -- el reporte sale directo (sin mensaje intermedio que pueda llegar en desorden)
     ELSE
       UPDATE diagnoses SET answers = v_ans, step = v_next, sub = NULL, attempts = 0, updated_at = now() WHERE id = d.id;
       v_out := diag_render(v_next, v_ans);
