@@ -50,7 +50,7 @@
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT s.*, $1::text AS wa_id, chatbot.config('wa_phone_number_id') AS phone_number_id,\n       chatbot.config('leads_sheet_id') AS sheet_id, chatbot.config('telegram_leads_chat_id') AS telegram_chat_id,\n       chatbot.known_lead_id($1) AS known_lead_id\n  FROM (SELECT 1) x LEFT JOIN LATERAL chatbot.diagnosis_step($1, $2, $3) s ON true",
+        "query": "SELECT s.*, $1::text AS wa_id, chatbot.config('wa_phone_number_id') AS phone_number_id,\n       chatbot.config('telegram_leads_chat_id') AS telegram_chat_id\n  FROM (SELECT 1) x LEFT JOIN LATERAL chatbot.diagnosis_step($1, $2, $3) s ON true",
         "options": {
           "queryReplacement": "={{ [ $json.wa_id, $json.text || '', $json.action || 'continue' ] }}"
         }
@@ -300,163 +300,111 @@
     },
     {
       "id": "g13",
-      "name": "Leer Sheet (Leads + Diagnósticos)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "name": "Registrar en Twenty",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
       "position": [
-        2420,
+        2200,
         200
       ],
-      "credentials": {
-        "googleApi": {
-          "id": "7rT6HnkbOiymsTAt",
-          "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
-        }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
       "parameters": {
-        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Paso (SQL)').first().json.sheet_id }}/values:batchGet?ranges=Leads!A1:Z&ranges={{ encodeURIComponent('Diagnósticos!A1:Z1') }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleApi",
-        "options": {}
-      }
-    },
-    {
-      "id": "g14",
-      "name": "Preparar filas",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2640,
-        200
-      ],
-      "parameters": {
-        "jsCode": "// Why Code: ubicar a la persona en «Leads» (por teléfono), combinar su fila sin pisar lo del website\n// y armar la fila de «Diagnósticos»; todo por NOMBRE de columna.\nconst step = $('Paso (SQL)').first().json;\nconst c = $('Calcular diagnóstico').first().json;\nconst [leadsRange, diagRange] = $('Leer Sheet (Leads + Diagnósticos)').first().json.valueRanges;\nconst values = leadsRange.values || [];\nconst header = (values[0] || []).map(h => String(h).trim());\nconst dHeader = ((diagRange.values || [])[0] || []).map(h => String(h).trim());\nconst col = (h) => header.indexOf(h);\nfor (const h of ['Lead ID', 'Etapa', 'WhatsApp / teléfono', 'Diagnóstico ID']) if (col(h) < 0) throw new Error('Falta la columna «' + h + '» en Leads');\nif (dHeader.indexOf('Diagnóstico ID') < 0) throw new Error('Falta la hoja Diagnósticos o su columna «Diagnóstico ID»');\n\nconst last10 = (v) => String(v || '').replace(/\\D/g, '').slice(-10);\nconst key = last10(step.wa_id);\nlet rowIndex = -1;\n// 1) por el Lead ID que ya conocemos de este WhatsApp; 2) por teléfono\nif (step.known_lead_id) rowIndex = values.findIndex((r, i) => i > 0 && String(r[col('Lead ID')] || '').trim() === step.known_lead_id);\nif (rowIndex < 1) for (let i = values.length - 1; i >= 1; i--) if (last10(values[i][col('WhatsApp / teléfono')]) === key) { rowIndex = i; break; }\nconst isNew = rowIndex < 0;\nconst row = isNew ? [] : [...values[rowIndex]];\nwhile (row.length < header.length) row.push('');\nconst get = (h) => (col(h) >= 0 ? String(row[col(h)] ?? '').trim() : '');\nconst put = (h, v) => { if (col(h) >= 0) row[col(h)] = v; };\nconst pretty = (d) => /^57\\d{10}$/.test(d) ? '+57 ' + d.slice(2, 5) + ' ' + d.slice(5, 8) + ' ' + d.slice(8) : '+' + d;\n\nconst leadId = isNew ? 'WA-' + c.today + '-D' + String(step.diagnosis_row_id).padStart(4, '0') : get('Lead ID');\nif (isNew) { put('Lead ID', leadId); put('Canal de entrada', 'WhatsApp'); put('Creado', c.now); put('WhatsApp / teléfono', pretty(step.wa_id)); }\nput('Etapa', 'Diagnosticado');\nif (!get('Nombre o empresa') && c.name) put('Nombre o empresa', c.name);\nif (!get('Correo') && c.email) put('Correo', c.email);\nput('Diagnóstico ID', c.diagnosisId);\nput('Actualizado', c.now);\n\nconst r = c.result;\nconst dVals = {\n  'Diagnóstico ID': c.diagnosisId, 'Lead ID': leadId, 'Fecha': c.now, 'Canal': 'WhatsApp', 'Idioma': 'ES',\n  'País': c.labels.country + ' (por indicativo)', 'Plazo': c.labels.timeline, 'Áreas': c.labels.area,\n  'Horas manuales/semana': r.weeklyManualHours ?? '',\n  'Ahorro anual estimado (US$)': r.moneyYear ? r.moneyYear.min + '–' + r.moneyYear.max : '',\n  'Calificación': c.qualification + ' (' + c.score + '/8)',\n  'Reporte': c.headline + ' · ' + c.labels.people + ' persona(s), ' + c.labels.hours + '/semana c/u, ' + c.labels.repetition.toLowerCase(),\n};\nconst dRow = dHeader.map(h => dVals[h] ?? '');\nconst lastCol = (n) => String.fromCharCode(64 + n);\nconst sheetRow = isNew ? null : rowIndex + 1;\nreturn [{ json: {\n  isNew, leadId, row, dRow,\n  leadRange: isNew ? 'Leads!A1:' + lastCol(header.length) + '1' : 'Leads!A' + sheetRow + ':' + lastCol(header.length) + sheetRow,\n  diagRange: 'Diagnósticos!A1:' + lastCol(dHeader.length) + '1',\n} }];"
-      }
-    },
-    {
-      "id": "g15",
-      "name": "¿Lead nuevo?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        2860,
-        200
-      ],
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "AdRAvX0gM0z2Ivhf"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "source": "diagnostico",
+            "wa_id": "={{ $('Paso (SQL)').first().json.wa_id }}",
+            "name": "={{ $('Calcular diagnóstico').first().json.name || '' }}",
+            "contact_channel": "",
+            "contact_phone": "",
+            "note_title": "={{ 'Diagnóstico por WhatsApp · ' + $('Calcular diagnóstico').first().json.diagnosisId }}",
+            "note": "={{ [ '**Diagnóstico rápido por WhatsApp** (' + $('Calcular diagnóstico').first().json.diagnosisId + ')', '', '- Área: ' + $('Calcular diagnóstico').first().json.labels.area, '- Equipo: ' + $('Calcular diagnóstico').first().json.labels.people + ' persona(s) × ' + $('Calcular diagnóstico').first().json.labels.hours + '/semana · ' + $('Calcular diagnóstico').first().json.labels.repetition, '- Plazo: ' + $('Calcular diagnóstico').first().json.labels.timeline + ' · País: ' + $('Calcular diagnóstico').first().json.labels.country + ' (por indicativo)', '- Resultado: ' + $('Calcular diagnóstico').first().json.headline, '- Calificación interna: ' + $('Calcular diagnóstico').first().json.qualification + ' (' + $('Calcular diagnóstico').first().json.score + '/8)', '', '---', '', $('Calcular diagnóstico').first().json.report.replace(/\\*/g, '**') ].join('\\n') }}",
+            "diag": "={{ ({ dolor: $('Calcular diagnóstico').first().json.labels.area + ' · ' + $('Calcular diagnóstico').first().json.labels.people + ' × ' + $('Calcular diagnóstico').first().json.labels.hours + '/semana · ' + $('Calcular diagnóstico').first().json.labels.repetition, ahorroUsd: $('Calcular diagnóstico').first().json.result.moneyYear ? Math.round(($('Calcular diagnóstico').first().json.result.moneyYear.min + $('Calcular diagnóstico').first().json.result.moneyYear.max) / 2) : null, plazoPais: 'Plazo: ' + $('Calcular diagnóstico').first().json.labels.timeline + ' · País: ' + $('Calcular diagnóstico').first().json.labels.country + ' (por indicativo)', qualification: $('Calcular diagnóstico').first().json.qualification }) }}"
           },
-          "conditions": [
+          "matchingColumns": [],
+          "schema": [
             {
-              "id": "g15c",
-              "leftValue": "={{ $json.isNew }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "wa_id",
+              "displayName": "wa_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "contact_channel",
+              "displayName": "contact_channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "contact_phone",
+              "displayName": "contact_phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "note_title",
+              "displayName": "note_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "note",
+              "displayName": "note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "diag",
+              "displayName": "diag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "object"
             }
           ],
-          "combinator": "and"
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
-        "options": {}
-      }
-    },
-    {
-      "id": "g16",
-      "name": "Agregar lead (Sheets)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3080,
-        100
-      ],
-      "credentials": {
-        "googleApi": {
-          "id": "7rT6HnkbOiymsTAt",
-          "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
-        }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
-      "onError": "continueRegularOutput",
-      "parameters": {
-        "method": "POST",
-        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Paso (SQL)').first().json.sheet_id }}/values/{{ encodeURIComponent($json.leadRange) }}:append?valueInputOption=RAW&insertDataOption=OVERWRITE",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ values: [ $json.row ] }) }}",
-        "options": {}
-      }
-    },
-    {
-      "id": "g17",
-      "name": "Actualizar lead (Sheets)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3080,
-        300
-      ],
-      "credentials": {
-        "googleApi": {
-          "id": "7rT6HnkbOiymsTAt",
-          "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
-        }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
-      "onError": "continueRegularOutput",
-      "parameters": {
-        "method": "PUT",
-        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Paso (SQL)').first().json.sheet_id }}/values/{{ encodeURIComponent($json.leadRange) }}?valueInputOption=RAW",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ values: [ $json.row ] }) }}",
-        "options": {}
-      }
-    },
-    {
-      "id": "g18",
-      "name": "Agregar diagnóstico (Sheets)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3300,
-        200
-      ],
-      "credentials": {
-        "googleApi": {
-          "id": "7rT6HnkbOiymsTAt",
-          "name": "Google Sheets Leads (cuenta de servicio n8n-kb)"
-        }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
-      "onError": "continueRegularOutput",
-      "parameters": {
-        "method": "POST",
-        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Paso (SQL)').first().json.sheet_id }}/values/{{ encodeURIComponent($('Preparar filas').first().json.diagRange) }}:append?valueInputOption=RAW&insertDataOption=OVERWRITE",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ values: [ $('Preparar filas').first().json.dRow ] }) }}",
         "options": {}
       }
     },
@@ -466,7 +414,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        3520,
+        2420,
         200
       ],
       "credentials": {
@@ -503,9 +451,9 @@
               "row": {
                 "buttons": [
                   {
-                    "text": "📊 Ver en el Sheet",
+                    "text": "📇 Ver en el CRM",
                     "additionalFields": {
-                      "url": "=https://docs.google.com/spreadsheets/d/{{ $('Paso (SQL)').first().json.sheet_id }}/edit"
+                      "url": "={{ $('Registrar en Twenty').first().json.opportunityUrl || 'https://crm.automaverso.com' }}"
                     }
                   }
                 ]
@@ -526,7 +474,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.7,
       "position": [
-        3740,
+        2640,
         200
       ],
       "retryOnFail": true,
@@ -542,7 +490,7 @@
         "operation": "executeQuery",
         "query": "SELECT chatbot.diagnosis_saved($1::int, $2::jsonb, $3, $4::int, $5, $6, NULLIF($7, '')::bigint, $8) AS ok",
         "options": {
-          "queryReplacement": "={{ [ $('Paso (SQL)').first().json.diagnosis_row_id, JSON.stringify($('Calcular diagnóstico').first().json.result), $('Calcular diagnóstico').first().json.qualification, $('Calcular diagnóstico').first().json.score, $('Calcular diagnóstico').first().json.diagnosisId, $('Preparar filas').first().json.leadId, String($json.result?.message_id || $json.message_id || ''), ($json.result?.message_id || $json.message_id) ? '' : JSON.stringify($json.error || $json).slice(0, 500) ] }}"
+          "queryReplacement": "={{ [ $('Paso (SQL)').first().json.diagnosis_row_id, JSON.stringify($('Calcular diagnóstico').first().json.result), $('Calcular diagnóstico').first().json.qualification, $('Calcular diagnóstico').first().json.score, $('Calcular diagnóstico').first().json.diagnosisId, $('Registrar en Twenty').first().json.leadId || '', String($json.result?.message_id || $json.message_id || ''), ($json.result?.message_id || $json.message_id) ? '' : JSON.stringify($json.error || $json).slice(0, 500) ] }}"
         }
       }
     },
@@ -552,7 +500,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        3960,
+        2860,
         200
       ],
       "parameters": {
@@ -604,7 +552,7 @@
       "parameters": {
         "width": 960,
         "height": 320,
-        "content": "## FLOW · Diagnóstico\nEntradas: `wa_id`, `text`, `action` (`start` | `continue`).\n1. `chatbot.diagnosis_step`: diagnóstico RÁPIDO, 5 preguntas con 3 botones cada una (área, personas, horas, repetición, plazo). *cancelar* lo detiene; se puede retomar dentro de 24 h.\n2. Al terminar, **Calcular diagnóstico** (`scripts/diagnosis-calc.js`) aplica la fórmula v2 del website con rangos simplificados; el país sale del indicativo y el costo por hora es la referencia de ese país. Calificación interna simplificada (0-8).\n3. Envía el reporte + botones *Hablar con un asesor* / *Ver ejemplos* → Sheet: **Leads** (crea o actualiza; Etapa *Diagnosticado*, Diagnóstico ID) y **Diagnósticos** (nueva fila, Canal WhatsApp) → aviso en Telegram con la calificación."
+        "content": "## FLOW · Diagnóstico\nEntradas: `wa_id`, `text`, `action` (`start` | `continue`).\n1. `chatbot.diagnosis_step`: diagnóstico RÁPIDO, 5 preguntas con 3 botones cada una (área, personas, horas, repetición, plazo). *cancelar* lo detiene; se puede retomar dentro de 24 h.\n2. Al terminar, **Calcular diagnóstico** (`scripts/diagnosis-calc.js`) aplica la fórmula v2 del website con rangos simplificados; el país sale del indicativo y el costo por hora es la referencia de ese país. Calificación interna simplificada (0-8).\n3. Envía el reporte + botones *Hablar con un asesor* / *Ver ejemplos* → **Twenty** (`FLOW · Registrar en Twenty`: persona por teléfono + oportunidad Comercial con los campos del diagnóstico y una nota) → aviso en Telegram con la calificación y enlace al CRM."
       }
     }
   ],
@@ -737,76 +685,14 @@
       "main": [
         [
           {
-            "node": "Leer Sheet (Leads + Diagnósticos)",
+            "node": "Registrar en Twenty",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Leer Sheet (Leads + Diagnósticos)": {
-      "main": [
-        [
-          {
-            "node": "Preparar filas",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Preparar filas": {
-      "main": [
-        [
-          {
-            "node": "¿Lead nuevo?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "¿Lead nuevo?": {
-      "main": [
-        [
-          {
-            "node": "Agregar lead (Sheets)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Actualizar lead (Sheets)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Agregar lead (Sheets)": {
-      "main": [
-        [
-          {
-            "node": "Agregar diagnóstico (Sheets)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Actualizar lead (Sheets)": {
-      "main": [
-        [
-          {
-            "node": "Agregar diagnóstico (Sheets)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Agregar diagnóstico (Sheets)": {
+    "Registrar en Twenty": {
       "main": [
         [
           {

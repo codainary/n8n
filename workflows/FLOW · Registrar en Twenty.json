@@ -1,0 +1,619 @@
+{
+  "name": "FLOW · Registrar en Twenty",
+  "nodes": [
+    {
+      "id": "t1",
+      "name": "Entrada",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "source",
+              "type": "string"
+            },
+            {
+              "name": "wa_id",
+              "type": "string"
+            },
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "contact_channel",
+              "type": "string"
+            },
+            {
+              "name": "contact_phone",
+              "type": "string"
+            },
+            {
+              "name": "note_title",
+              "type": "string"
+            },
+            {
+              "name": "note",
+              "type": "string"
+            },
+            {
+              "name": "diag",
+              "type": "object"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t2",
+      "name": "Preparar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Why Code: normalizar el teléfono al formato de Twenty (indicativo + número) y armar los filtros.\nconst i = $input.first().json;\nconst CODES = [['57','CO'],['34','ES'],['52','MX'],['54','AR'],['55','BR'],['56','CL'],['58','VE'],['51','PE'],['53','CU'],\n  ['591','BO'],['593','EC'],['595','PY'],['598','UY'],['502','GT'],['503','SV'],['504','HN'],['505','NI'],['506','CR'],\n  ['507','PA'],['509','HT'],['351','PT'],['44','GB'],['49','DE'],['33','FR'],['39','IT'],['1','US']]\n  .sort((a, b) => b[0].length - a[0].length);\nconst phone = (raw) => {\n  const d = String(raw || '').replace(/\\D/g, '');\n  const c = CODES.find(([dial]) => d.startsWith(dial) && d.length - dial.length >= 6);\n  return c ? { primaryPhoneNumber: d.slice(c[0].length), primaryPhoneCountryCode: c[1], primaryPhoneCallingCode: '+' + c[0] }\n           : { primaryPhoneNumber: d, primaryPhoneCountryCode: '', primaryPhoneCallingCode: '' };\n};\nconst wa = phone(i.wa_id);\nconst q = (s) => encodeURIComponent(s);\nreturn [{ json: {\n  ...i,\n  diag: i.diag && typeof i.diag === 'object' ? i.diag : null,\n  waPhone: wa,\n  contactPhone: phone(i.contact_phone || i.wa_id),\n  contactE164: '+' + String(i.contact_phone || i.wa_id).replace(/\\D/g, ''),\n  personFilter: q('phones.primaryPhoneNumber[eq]:\"' + wa.primaryPhoneNumber + '\"'),\n  companyFilter: q('telefono.primaryPhoneNumber[eq]:\"' + wa.primaryPhoneNumber + '\"'),\n} }];"
+      }
+    },
+    {
+      "id": "t3",
+      "name": "Buscar persona",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3Gt2bO1d28OiwA5s",
+          "name": "Twenty CRM (Bearer)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true,
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "url": "=http://twenty-server:3000/rest/people?limit=1&depth=0&filter={{ $json.personFilter }}"
+      }
+    },
+    {
+      "id": "t4",
+      "name": "Buscar empresa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3Gt2bO1d28OiwA5s",
+          "name": "Twenty CRM (Bearer)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true,
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "url": "=http://twenty-server:3000/rest/companies?limit=1&depth=0&filter={{ $('Preparar').first().json.companyFilter }}"
+      }
+    },
+    {
+      "id": "t5",
+      "name": "Datos de la persona",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Why Code: decidir si la persona se crea o se actualiza (upsert por id) sin pisar lo que ya tiene.\nconst p = $('Preparar').first().json;\nconst found = ($('Buscar persona').first().json.data?.people || [])[0];\nconst company = ($('Buscar empresa').first().json.data?.companies || [])[0];\nconst LEVEL = { encaja: 'ALTO', dudoso: 'MEDIO', no_califica: 'BAJO' };\nconst companyId = found?.companyId || company?.id || null;\nconst [firstName = '', ...rest] = String(p.name || '').trim().split(/\\s+/);\nconst body = found ? { id: found.id } : {\n  name: { firstName: firstName || 'WhatsApp', lastName: firstName ? rest.join(' ') : '+' + String(p.wa_id) },\n  phones: p.waPhone, canal: 'WHATSAPP', leadId: 'WA-' + p.wa_id,\n};\nif (found && p.name && (!found.name?.firstName || found.name.firstName === 'WhatsApp')) body.name = { firstName, lastName: rest.join(' ') };\nif (!found?.companyId && companyId) body.companyId = companyId;\nif (!found || ['SIN_TRABAJAR', 'DESCARTADA', '', null, undefined].includes(found.estado)) body.estado = 'EN_PROCESO';\nif (p.diag?.qualification && LEVEL[p.diag.qualification]) body.nivel = LEVEL[p.diag.qualification];\nreturn [{ json: { body, isNew: !found, companyId, companyEstado: company?.id === companyId ? company?.estado : null } }];"
+      }
+    },
+    {
+      "id": "t6",
+      "name": "Guardar persona",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3Gt2bO1d28OiwA5s",
+          "name": "Twenty CRM (Bearer)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "POST",
+        "url": "http://twenty-server:3000/rest/people?upsert=true",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}"
+      }
+    },
+    {
+      "id": "t7",
+      "name": "Buscar oportunidad abierta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3Gt2bO1d28OiwA5s",
+          "name": "Twenty CRM (Bearer)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true,
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "url": "=http://twenty-server:3000/rest/opportunities?limit=1&depth=0&order_by=createdAt[DescNullsLast]&filter={{ encodeURIComponent('and(proceso[eq]:\"COMERCIAL\",etapaComercial[in]:[\"NUEVO\",\"POR_CONTACTAR\",\"CONTACTADO\",\"DIAGNOSTICO_AGENDADO\",\"DIAGNOSTICO_HECHO\",\"PROPUESTA_ENVIADA\",\"NEGOCIACION\",\"NUTRIR\"],or(pointOfContactId[eq]:\"' + $json.data.createPerson.id + '\"' + ($('Datos de la persona').first().json.companyId ? ',companyId[eq]:\"' + $('Datos de la persona').first().json.companyId + '\"' : '') + '))') }}"
+      }
+    },
+    {
+      "id": "t8",
+      "name": "Datos de la oportunidad",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Why Code: armar la oportunidad (nueva en «Nuevo» o la abierta) según venga del diagnóstico o del asesor.\nconst p = $('Preparar').first().json;\nconst person = $('Guardar persona').first().json.data.createPerson;\nconst plan = $('Datos de la persona').first().json;\nconst open = ($('Buscar oportunidad abierta').first().json.data?.opportunities || [])[0];\nconst name = [person.name?.firstName, person.name?.lastName].filter(Boolean).join(' ');\nconst company = ($('Buscar empresa').first().json.data?.companies || [])[0];\nconst body = open ? { id: open.id } : {\n  name: (company?.id && company.id === plan.companyId ? company.name : name) + ' · Comercial', proceso: 'COMERCIAL', etapaComercial: 'NUEVO',\n  ...(plan.companyId ? { companyId: plan.companyId } : {}),\n};\n// La abierta se creó antes de saber el nombre («WhatsApp +57…»): ahora que lo sabemos, se renombra.\nif (open && /^WhatsApp \\+/.test(open.name || '') && name && !name.startsWith('WhatsApp')) body.name = name + ' · Comercial';\nbody.pointOfContactId = person.id;\nbody.fechaProximaAccion = new Date().toISOString();\nif (p.source === 'asesor') {\n  const call = p.contact_channel === 'phone_call' || p.contact_channel === 'whatsapp_call';\n  body.contactarPor = call ? 'LLAMADA' : 'WHATSAPP';\n  body.telefonoContacto = p.contactPhone;\n  body.proximaAccion = ({ phone_call: 'Llamar al celular', whatsapp_call: 'Llamar por WhatsApp', chat: 'Escribir por WhatsApp' }[p.contact_channel] || 'Contactar')\n    + ' al ' + p.contactE164 + ' (pidió un asesor por WhatsApp)';\n} else {\n  body.proximaAccion = 'Escribir por WhatsApp al ' + p.contactE164 + ' (hizo el diagnóstico por WhatsApp)';\n  if (!open) { body.contactarPor = 'WHATSAPP'; body.telefonoContacto = p.waPhone; }\n}\nif (p.diag) {\n  if (p.diag.dolor) body.diagDolorPrincipal = p.diag.dolor;\n  if (p.diag.ahorroUsd) body.diagAhorroAnualUsd = Number(p.diag.ahorroUsd);\n  if (p.diag.plazoPais) body.diagPresupuestoPlazo = p.diag.plazoPais;\n}\nreturn [{ json: { body, reused: !!open, personId: person.id, leadId: person.leadId || '', personName: name } }];"
+      }
+    },
+    {
+      "id": "t9",
+      "name": "Guardar oportunidad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3Gt2bO1d28OiwA5s",
+          "name": "Twenty CRM (Bearer)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "POST",
+        "url": "http://twenty-server:3000/rest/opportunities?upsert=true",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}"
+      }
+    },
+    {
+      "id": "t10",
+      "name": "¿Reabrir empresa?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1980,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "t10c",
+              "leftValue": "={{ !!$('Datos de la persona').first().json.companyId && ['SIN_TRABAJAR', 'DESCARTADA', '', null, undefined].includes($('Datos de la persona').first().json.companyEstado) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "t11",
+      "name": "Empresa en proceso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        200
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3Gt2bO1d28OiwA5s",
+          "name": "Twenty CRM (Bearer)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "POST",
+        "url": "http://twenty-server:3000/rest/companies?upsert=true",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ id: $('Datos de la persona').first().json.companyId, estado: 'EN_PROCESO' }) }}"
+      }
+    },
+    {
+      "id": "t12",
+      "name": "Juntar",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2420,
+        300
+      ],
+      "parameters": {
+        "mode": "chooseBranch",
+        "chooseBranchMode": "waitForAll",
+        "output": "empty"
+      }
+    },
+    {
+      "id": "t13",
+      "name": "Crear nota",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3Gt2bO1d28OiwA5s",
+          "name": "Twenty CRM (Bearer)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "POST",
+        "url": "http://twenty-server:3000/rest/notes",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ title: $('Preparar').first().json.note_title || 'WhatsApp', bodyV2: { markdown: $('Preparar').first().json.note || '', blocknote: null } }) }}"
+      }
+    },
+    {
+      "id": "t14",
+      "name": "Enlazar nota",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3Gt2bO1d28OiwA5s",
+          "name": "Twenty CRM (Bearer)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "POST",
+        "url": "http://twenty-server:3000/rest/noteTargets",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ noteId: $json.data.createNote.id, targetOpportunityId: $('Guardar oportunidad').first().json.data.createOpportunity.id }) }}"
+      }
+    },
+    {
+      "id": "t15",
+      "name": "Resultado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3080,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "personId",
+              "type": "string",
+              "value": "={{ $('Datos de la oportunidad').first().json.personId }}"
+            },
+            {
+              "id": "r2",
+              "name": "leadId",
+              "type": "string",
+              "value": "={{ $('Datos de la oportunidad').first().json.leadId }}"
+            },
+            {
+              "id": "r3",
+              "name": "opportunityId",
+              "type": "string",
+              "value": "={{ $('Guardar oportunidad').first().json.data.createOpportunity.id }}"
+            },
+            {
+              "id": "r4",
+              "name": "opportunityUrl",
+              "type": "string",
+              "value": "={{ 'https://crm.automaverso.com/object/opportunity/' + $('Guardar oportunidad').first().json.data.createOpportunity.id }}"
+            },
+            {
+              "id": "r5",
+              "name": "isNewPerson",
+              "type": "boolean",
+              "value": "={{ $('Datos de la persona').first().json.isNew }}"
+            },
+            {
+              "id": "r6",
+              "name": "reused",
+              "type": "boolean",
+              "value": "={{ $('Datos de la oportunidad').first().json.reused }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "note",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -60
+      ],
+      "parameters": {
+        "width": 1000,
+        "height": 280,
+        "content": "## FLOW · Registrar en Twenty\nEntradas: `source` (diagnostico | asesor), `wa_id`, `name`, `contact_channel` (chat | whatsapp_call | phone_call), `contact_phone`, `note_title`, `note` (markdown), `diag` ({ dolor, ahorroUsd, plazoPais, qualification }).\n1. Persona por teléfono (si no existe: se crea con Lead ID `WA-<número>`, canal WhatsApp, y se liga a la empresa importada que tenga ese teléfono).\n2. Oportunidad del embudo **Comercial**: reusa la abierta (de la persona o su empresa) o abre una en **Nuevo**, con contacto, próxima acción y campos del diagnóstico.\n3. Empresa *Sin trabajar*/*Descartada* → *En proceso*. Nota en la oportunidad.\nDevuelve `{ personId, leadId, opportunityId, opportunityUrl, isNewPerson, reused }`. Twenty: `http://twenty-server:3000` (red interna)."
+      }
+    }
+  ],
+  "connections": {
+    "Entrada": {
+      "main": [
+        [
+          {
+            "node": "Preparar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar": {
+      "main": [
+        [
+          {
+            "node": "Buscar persona",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar persona": {
+      "main": [
+        [
+          {
+            "node": "Buscar empresa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar empresa": {
+      "main": [
+        [
+          {
+            "node": "Datos de la persona",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos de la persona": {
+      "main": [
+        [
+          {
+            "node": "Guardar persona",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar persona": {
+      "main": [
+        [
+          {
+            "node": "Buscar oportunidad abierta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar oportunidad abierta": {
+      "main": [
+        [
+          {
+            "node": "Datos de la oportunidad",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos de la oportunidad": {
+      "main": [
+        [
+          {
+            "node": "Guardar oportunidad",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar oportunidad": {
+      "main": [
+        [
+          {
+            "node": "¿Reabrir empresa?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Reabrir empresa?": {
+      "main": [
+        [
+          {
+            "node": "Empresa en proceso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Juntar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Empresa en proceso": {
+      "main": [
+        [
+          {
+            "node": "Juntar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Juntar": {
+      "main": [
+        [
+          {
+            "node": "Crear nota",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear nota": {
+      "main": [
+        [
+          {
+            "node": "Enlazar nota",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enlazar nota": {
+      "main": [
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "timezone": "America/Bogota"
+  },
+  "id": "AdRAvX0gM0z2Ivhf"
+}

@@ -1,3 +1,6 @@
+> **Obsoleto (nov-2026)**: el website y el bot de WhatsApp ya no escriben en este Sheet; los leads van al CRM
+> Twenty (ver `docs/chatbot-whatsapp.md` › «CRM (Twenty)»). Se conserva como histórico.
+
 # Sheet «Automaverso · Leads» — estructura
 
 Spreadsheet `1huKPPW_kkbLVsw6jSpMXUgD74I9o5Jvk8v6N9_kHXcA` (propietario hello@automaverso.com).

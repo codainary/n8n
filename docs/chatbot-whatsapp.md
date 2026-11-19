@@ -133,8 +133,9 @@ caracteres (~800 tokens) con 400 de solapamiento, cortando por párrafos.
 | `TOOL · Consultar base de conocimiento` | herramienta del agente | top-k por namespace, umbral, fuentes, log |
 | `EX · 1 Sincronizar ejemplos` | cada hora + manual | videos de Drive + catálogo → sube a Meta → `chatbot.examples` |
 | `TOOL · Enviar ejemplo` | herramienta del agente + botón | siguiente video no visto + botones *Ver otro ejemplo* / *Hablar con un asesor* |
-| `FLOW · Contacto con asesor` | botón + herramienta del agente | pide nombre y medio de contacto → Sheet de leads → aviso en Telegram |
-| `FLOW · Diagnóstico` | botón + herramienta del agente | diagnóstico gratis por WhatsApp (preguntas interactivas) → reporte → Sheet → Telegram |
+| `FLOW · Contacto con asesor` | botón + herramienta del agente | pide nombre y medio de contacto → Twenty (CRM) → aviso en Telegram |
+| `FLOW · Diagnóstico` | botón + herramienta del agente | diagnóstico gratis por WhatsApp (preguntas interactivas) → reporte → Twenty (CRM) → Telegram |
+| `FLOW · Registrar en Twenty` | sub-workflow | persona por teléfono + oportunidad del embudo Comercial + nota (lo usan los dos anteriores) |
 
 **Reindexación completa**: abrir `KB · 1` en n8n y ejecutar el disparador «Reindexar todo (manual)».
 
@@ -325,15 +326,29 @@ directamente; los cambios en Drive llegan a Pinecone en ≤ 10 min.
   Mientras hay una solicitud activa, todo mensaje del usuario va al flujo (no al agente). *cancelar* la
   detiene; 3 respuestas inválidas seguidas la cancelan; vence tras 2 h sin respuesta.
 - **Al completar** (`FLOW · Contacto con asesor`): confirma al usuario → resumen de la conversación
-  (gpt-4.1-mini) → hoja **Leads** del Sheet «Automaverso · Leads» (`leads_sheet_id`): busca a la persona por
-  los últimos 10 dígitos del teléfono; si existe actualiza solo *WhatsApp / teléfono*, *Medio de contacto*,
-  *Resumen*, *Actualizado* (y Nombre/Etapa si estaban vacíos); si no, crea `WA-yyyymmdd-NNNN` con Etapa
-  *Contacto solicitado* y Canal de entrada *WhatsApp*. Escribe por **nombre de columna** (ver `docs/leads-sheet.md`).
+  (gpt-4.1-mini) → **Twenty** vía `FLOW · Registrar en Twenty` (ver «CRM (Twenty)» abajo): oportunidad con
+  *Contactar por* (WhatsApp / Llamada), *Teléfono de contacto*, *Próxima acción* y una nota con el resumen.
 - **Telegram** (bot @automaversosas_bot, grupo `telegram_leads_chat_id`): nombre, medio preferido, teléfono,
-  diagnóstico (✅ si la fila tiene *Diagnóstico ID*), resumen y botones *Abrir chat de WhatsApp* (wa.me) y
-  *Ver en el Sheet*. Resultado en `chatbot.handoffs` (lead_id, sheet_row, telegram_message_id, notify_error).
-- Credenciales n8n: `Google Sheets Leads (cuenta de servicio n8n-kb)` (scope spreadsheets; la cuenta de
-  servicio es editora solo de ese Sheet) y `Telegram Leads (automaversosas_bot)`.
+  diagnóstico (✅ si ese WhatsApp ya hizo uno), Lead ID, resumen y botones *Abrir chat de WhatsApp* (wa.me) y
+  *Ver en el CRM* (la oportunidad en Twenty). Resultado en `chatbot.handoffs` (lead_id, telegram_message_id,
+  notify_error). Si Twenty falla, el aviso sale igual con «⚠️ no se pudo registrar en el CRM».
+- Credenciales n8n: `Twenty CRM (Bearer)` y `Telegram Leads (automaversosas_bot)`.
+
+### CRM (Twenty) — `FLOW · Registrar en Twenty`
+
+Sub-workflow que usan el diagnóstico y la solicitud de asesor (mismo criterio que el website,
+`automaverso-web/server/services/contact.ts`). Twenty se llama por la red interna del VPS
+(`http://twenty-server:3000/rest`, sin Cloudflare Access) con la credencial `Twenty CRM (Bearer)`.
+Generador: `scripts/twenty-workflow.mjs`.
+1. **Persona** por teléfono (`phones.primaryPhoneNumber`). Si no existe se crea con Lead ID `WA-<número>`,
+   canal *WhatsApp*, estado *En proceso*; si el número coincide con el teléfono de una **empresa importada**
+   (p. ej. lote RUES), la persona queda ligada a esa empresa. Si dice su nombre después, se completa.
+2. **Oportunidad** del embudo *Comercial*: reusa la abierta de la persona o de su empresa; si no hay, abre una
+   en *Nuevo* («<nombre o empresa> · Comercial»). Se actualizan contacto, próxima acción y campos del diagnóstico.
+3. La empresa ligada en *Sin trabajar* / *Descartada* pasa a *En proceso*.
+4. Nota en la oportunidad (reporte del diagnóstico o resumen de la conversación).
+Devuelve `{ personId, leadId, opportunityId, opportunityUrl, isNewPerson, reused }`. Se llama con
+`onError: continue`: si Twenty falla, el usuario igual recibe su respuesta.
 
 ### Flujo «Diagnóstico gratis» (por WhatsApp; ya no se envía al usuario al website)
 
@@ -356,12 +371,11 @@ directamente; los cambios en Drive llegan a Pinecone en ≤ 10 min.
   4 respuestas inválidas lo cancelan.
 - **Resultado**: horas y ahorro al año, potencial, % automatizable, semanas para pagar un piloto y 3 automatizaciones
   sugeridas para el área; luego botones *Hablar con un asesor* / *Ver ejemplos*.
-- **Sheet**: fila nueva en **Diagnósticos** (`DIAG-WA-yyyymmdd-NNNN`, Canal WhatsApp, país «por indicativo»,
-  plazo, área, horas/semana, ahorro en US$, calificación «x/8», reporte con las respuestas) y en **Leads**
-  crea/actualiza a la persona (Etapa *Diagnosticado*, *Diagnóstico ID*). Ubica a la persona primero por el Lead ID
-  que ya tiene ese WhatsApp (`chatbot.known_lead_id`) y luego por teléfono, para no duplicarla.
+- **CRM**: `FLOW · Registrar en Twenty` con los campos *Diag · Dolor principal* (área · personas × horas · repetición),
+  *Diag · Ahorro estimado (US$/año)* (punto medio), *Diag · Presupuesto y plazo* (plazo y país «por indicativo»),
+  el *Nivel* de la persona según la calificación y una nota con el reporte (`DIAG-WA-yyyymmdd-NNNN`).
 - **Telegram** (corto): nombre, WhatsApp, calificación (✅ encaja / 🟡 dudoso / ⛔ no califica, x/8) y resultado,
-  con botones al chat y al Sheet. La calificación nunca se muestra al cliente.
+  con botones al chat y al CRM. La calificación nunca se muestra al cliente.
 - La solicitud de asesor tampoco vuelve a pedir el nombre si ya lo conocemos.
 - **Herramientas que envían sus propios mensajes** (`enviar_ejemplo`, `solicitar_asesor`, `iniciar_diagnostico`):
   WA · 2 descarta el texto del agente si alguna devolvió ENVIADO / SIN_MAS_EJEMPLOS (lee `intermediateSteps`).
