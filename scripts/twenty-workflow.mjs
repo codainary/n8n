@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Genera «FLOW · Registrar en Twenty» (sub-workflow): deja un lead de WhatsApp en el CRM (Twenty).
-//   persona (por teléfono; si no existe, la crea y la liga a la empresa importada con ese teléfono)
+//   empresa: la del código de campaña que escribió («ref XXXXXX», Company.codigoRef) o la que tenga su teléfono
+//   persona (por teléfono; si no existe, la crea) ligada a esa empresa
 //   → oportunidad en el embudo Comercial (reusa la abierta o abre una en «Nuevo»)
 //   → empresa «Sin trabajar»/«Descartada» pasa a «En proceso» → nota en la oportunidad.
 // La usan «FLOW · Diagnóstico» (source = diagnostico) y «FLOW · Contacto con asesor» (source = asesor).
@@ -9,6 +10,7 @@
 // Conserva el id si el JSON ya existe.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
+const PG = { postgres: { id: 'aV6poYyo4OBcJu8E', name: 'Postgres VPS (chatbot)' } };
 export const TWENTY = { httpHeaderAuth: { id: process.env.TWENTY_CREDENTIAL_ID || 'PENDIENTE', name: 'Twenty CRM (Bearer)' } };
 const BASE = 'http://twenty-server:3000/rest';
 const SUB_PATH = 'workflows/FLOW · Registrar en Twenty.json';
@@ -37,6 +39,16 @@ const http = (id, name, pos, parameters, extra = {}) => ({
 const get = (id, name, pos, url) => http(id, name, pos, { url }, { alwaysOutputData: true });
 const post = (id, name, pos, url, body) =>
   http(id, name, pos, { method: 'POST', url, sendBody: true, specifyBody: 'json', jsonBody: `={{ JSON.stringify(${body}) }}` });
+// Código de campaña: los enlaces de los correos abren WhatsApp con «… (ref XXXXXX)». Se toma el último que haya escrito.
+const REF_SQL = String.raw`SELECT upper((regexp_match(m.text_body, '\mref[\s:#-]*([A-Za-z0-9]{6})\M', 'i'))[1]) AS ref
+  FROM chatbot.messages m
+ WHERE m.wa_id = $1 AND m.direction = 'in' AND m.text_body ~* '\mref[\s:#-]*[A-Za-z0-9]{6}\M'
+ ORDER BY m.meta_timestamp DESC LIMIT 1`;
+const pg = (id, name, pos, query, params) => ({
+  id, name, type: 'n8n-nodes-base.postgres', typeVersion: 2.7, position: pos, alwaysOutputData: true,
+  retryOnFail: true, maxTries: 3, waitBetweenTries: 1000, credentials: PG,
+  parameters: { operation: 'executeQuery', query, options: { queryReplacement: params } },
+});
 const code = (id, name, pos, jsCode) => ({ id, name, type: 'n8n-nodes-base.code', typeVersion: 2, position: pos, parameters: { jsCode } });
 const connect = (pairs) => {
   const c = {};
@@ -73,21 +85,28 @@ return [{ json: {
 } }];`;
 
 const PERSON = String.raw`// Why Code: decidir si la persona se crea o se actualiza (upsert por id) sin pisar lo que ya tiene.
+// Empresa, de más a menos segura: código de campaña > la que ya tiene la persona > la que tiene su teléfono.
 const p = $('Preparar').first().json;
 const found = ($('Buscar persona').first().json.data?.people || [])[0];
-const company = ($('Buscar empresa').first().json.data?.companies || [])[0];
+const ref = $('Buscar código de campaña').first().json.ref || '';
+const byRef = ref ? ($('Buscar empresa por código').first().json.data?.companies || [])[0] : null;
+const byPhone = ($('Buscar empresa').first().json.data?.companies || [])[0];
 const LEVEL = { encaja: 'ALTO', dudoso: 'MEDIO', no_califica: 'BAJO' };
-const companyId = found?.companyId || company?.id || null;
+const companyId = byRef?.id || found?.companyId || byPhone?.id || null;
+const company = [byRef, byPhone].find((c) => c?.id && c.id === companyId) || null;
+const matchedBy = byRef ? 'código de campaña ' + ref : (!found?.companyId && byPhone ? 'teléfono de la empresa' : '');
+const matchNote = (matchedBy || ref ? '\n' : '') + (matchedBy ? '\n- Empresa del CRM encontrada por: ' + matchedBy : '')
+  + (ref ? '\n- Llegó por un enlace de campaña (ref ' + ref + ')' + (byRef ? '' : ': ningún código coincide en el CRM') : '');
 const [firstName = '', ...rest] = String(p.name || '').trim().split(/\s+/);
 const body = found ? { id: found.id } : {
   name: { firstName: firstName || 'WhatsApp', lastName: firstName ? rest.join(' ') : '+' + String(p.wa_id) },
   phones: p.waPhone, canal: 'WHATSAPP', leadId: 'WA-' + p.wa_id,
 };
 if (found && p.name && (!found.name?.firstName || found.name.firstName === 'WhatsApp')) body.name = { firstName, lastName: rest.join(' ') };
-if (!found?.companyId && companyId) body.companyId = companyId;
+if (companyId && found?.companyId !== companyId) body.companyId = companyId;
 if (!found || ['SIN_TRABAJAR', 'DESCARTADA', '', null, undefined].includes(found.estado)) body.estado = 'EN_PROCESO';
 if (p.diag?.qualification && LEVEL[p.diag.qualification]) body.nivel = LEVEL[p.diag.qualification];
-return [{ json: { body, isNew: !found, companyId, companyEstado: company?.id === companyId ? company?.estado : null } }];`;
+return [{ json: { body, isNew: !found, companyId, company, companyEstado: company ? company.estado : null, ref, matchNote } }];`;
 
 const OPPORTUNITY = String.raw`// Why Code: armar la oportunidad (nueva en «Nuevo» o la abierta) según venga del diagnóstico o del asesor.
 const p = $('Preparar').first().json;
@@ -95,9 +114,9 @@ const person = $('Guardar persona').first().json.data.createPerson;
 const plan = $('Datos de la persona').first().json;
 const open = ($('Buscar oportunidad abierta').first().json.data?.opportunities || [])[0];
 const name = [person.name?.firstName, person.name?.lastName].filter(Boolean).join(' ');
-const company = ($('Buscar empresa').first().json.data?.companies || [])[0];
+const company = plan.company;
 const body = open ? { id: open.id } : {
-  name: (company?.id && company.id === plan.companyId ? company.name : name) + ' · Comercial', proceso: 'COMERCIAL', etapaComercial: 'NUEVO',
+  name: (company?.name || name) + ' · Comercial', proceso: 'COMERCIAL', etapaComercial: 'NUEVO',
   ...(plan.companyId ? { companyId: plan.companyId } : {}),
 };
 // La abierta se creó antes de saber el nombre («WhatsApp +57…»): ahora que lo sabemos, se renombra.
@@ -135,7 +154,10 @@ const wf = {
     code('t2', 'Preparar', [220, 300], PREPARE),
     get('t3', 'Buscar persona', [440, 300], `=${BASE}/people?limit=1&depth=0&filter={{ $json.personFilter }}`),
     get('t4', 'Buscar empresa', [660, 300], `=${BASE}/companies?limit=1&depth=0&filter={{ ${P}.companyFilter }}`),
-    code('t5', 'Datos de la persona', [880, 300], PERSON),
+    pg('t4b', 'Buscar código de campaña', [660, 480], REF_SQL, `={{ [ ${P}.wa_id ] }}`),
+    get('t4c', 'Buscar empresa por código', [880, 480],
+      `=${BASE}/companies?limit=1&depth=0&filter={{ encodeURIComponent('codigoRef[eq]:"' + ($json.ref || '-') + '"') }}`),
+    code('t5', 'Datos de la persona', [1100, 480], PERSON),
     post('t6', 'Guardar persona', [1100, 300], `${BASE}/people?upsert=true`, '$json.body'),
     get('t7', 'Buscar oportunidad abierta', [1320, 300], `=${BASE}/opportunities?limit=1&depth=0&order_by=createdAt[DescNullsLast]&filter={{ ${OPEN_FILTER} }}`),
     code('t8', 'Datos de la oportunidad', [1540, 300], OPPORTUNITY),
@@ -149,7 +171,7 @@ const wf = {
     { id: 't12', name: 'Juntar', type: 'n8n-nodes-base.merge', typeVersion: 3.2, position: [2420, 300],
       parameters: { mode: 'chooseBranch', chooseBranchMode: 'waitForAll', output: 'empty' } },
     post('t13', 'Crear nota', [2640, 300], `${BASE}/notes`,
-      `{ title: ${P}.note_title || 'WhatsApp', bodyV2: { markdown: ${P}.note || '', blocknote: null } }`, { onError: 'continueRegularOutput' }),
+      `{ title: ${P}.note_title || 'WhatsApp', bodyV2: { markdown: (${P}.note || '') + $('Datos de la persona').first().json.matchNote, blocknote: null } }`, { onError: 'continueRegularOutput' }),
     post('t14', 'Enlazar nota', [2860, 300], `${BASE}/noteTargets`,
       `{ noteId: $json.data.createNote.id, targetOpportunityId: ${OPP}.id }`, { onError: 'continueRegularOutput' }),
     { id: 't15', name: 'Resultado', type: 'n8n-nodes-base.set', typeVersion: 3.4, position: [3080, 300],
@@ -162,11 +184,12 @@ const wf = {
         { id: 'r6', name: 'reused', type: 'boolean', value: `={{ ${O}.reused }}` },
       ] }, options: {} } },
     { id: 'note', name: 'Nota', type: 'n8n-nodes-base.stickyNote', typeVersion: 1, position: [-40, -60],
-      parameters: { width: 1000, height: 280, content: '## FLOW · Registrar en Twenty\nEntradas: `source` (diagnostico | asesor), `wa_id`, `name`, `contact_channel` (chat | whatsapp_call | phone_call), `contact_phone`, `note_title`, `note` (markdown), `diag` ({ dolor, ahorroUsd, plazoPais, qualification }).\n1. Persona por teléfono (si no existe: se crea con Lead ID `WA-<número>`, canal WhatsApp, y se liga a la empresa importada que tenga ese teléfono).\n2. Oportunidad del embudo **Comercial**: reusa la abierta (de la persona o su empresa) o abre una en **Nuevo**, con contacto, próxima acción y campos del diagnóstico.\n3. Empresa *Sin trabajar*/*Descartada* → *En proceso*. Nota en la oportunidad.\nDevuelve `{ personId, leadId, opportunityId, opportunityUrl, isNewPerson, reused }`. Twenty: `http://twenty-server:3000` (red interna).' } },
+      parameters: { width: 1000, height: 280, content: '## FLOW · Registrar en Twenty\nEntradas: `source` (diagnostico | asesor), `wa_id`, `name`, `contact_channel` (chat | whatsapp_call | phone_call), `contact_phone`, `note_title`, `note` (markdown), `diag` ({ dolor, ahorroUsd, plazoPais, qualification }).\n1. Empresa: la del código de campaña que escribió (`ref XXXXXX` en el chat → Company.codigoRef), si no la que ya tiene la persona, si no la que tenga su teléfono. Persona por teléfono (si no existe: se crea con Lead ID `WA-<número>`, canal WhatsApp) ligada a esa empresa.\n2. Oportunidad del embudo **Comercial**: reusa la abierta (de la persona o su empresa) o abre una en **Nuevo**, con contacto, próxima acción y campos del diagnóstico.\n3. Empresa *Sin trabajar*/*Descartada* → *En proceso*. Nota en la oportunidad.\nDevuelve `{ personId, leadId, opportunityId, opportunityUrl, isNewPerson, reused }`. Twenty: `http://twenty-server:3000` (red interna).' } },
   ],
   connections: connect([
     ['Entrada', 'Preparar'], ['Preparar', 'Buscar persona'], ['Buscar persona', 'Buscar empresa'],
-    ['Buscar empresa', 'Datos de la persona'], ['Datos de la persona', 'Guardar persona'],
+    ['Buscar empresa', 'Buscar código de campaña'], ['Buscar código de campaña', 'Buscar empresa por código'],
+    ['Buscar empresa por código', 'Datos de la persona'], ['Datos de la persona', 'Guardar persona'],
     ['Guardar persona', 'Buscar oportunidad abierta'], ['Buscar oportunidad abierta', 'Datos de la oportunidad'],
     ['Datos de la oportunidad', 'Guardar oportunidad'], ['Guardar oportunidad', '¿Reabrir empresa?'],
     ['¿Reabrir empresa?', 'Empresa en proceso', 0], ['¿Reabrir empresa?', 'Juntar', 1], ['Empresa en proceso', 'Juntar'],
@@ -181,7 +204,7 @@ if (process.argv[1]?.endsWith('twenty-workflow.mjs')) {
     const prev = JSON.parse(readFileSync(path, 'utf8'));
     wf.id = prev.id;
     const cred = prev.nodes.find((n) => n.credentials?.httpHeaderAuth)?.credentials.httpHeaderAuth;
-    if (cred && !process.env.TWENTY_CREDENTIAL_ID) for (const n of wf.nodes) if (n.credentials) n.credentials = { httpHeaderAuth: cred };
+    if (cred && !process.env.TWENTY_CREDENTIAL_ID) for (const n of wf.nodes) if (n.credentials?.httpHeaderAuth) n.credentials = { httpHeaderAuth: cred };
   }
   writeFileSync(path, JSON.stringify(wf, null, 2) + '\n');
   console.log('escrito', path, wf.id || '(nuevo)');

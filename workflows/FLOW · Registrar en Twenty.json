@@ -120,16 +120,71 @@
       }
     },
     {
+      "id": "t4b",
+      "name": "Buscar código de campaña",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        660,
+        480
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": {
+        "postgres": {
+          "id": "aV6poYyo4OBcJu8E",
+          "name": "Postgres VPS (chatbot)"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT upper((regexp_match(m.text_body, '\\mref[\\s:#-]*([A-Za-z0-9]{6})\\M', 'i'))[1]) AS ref\n  FROM chatbot.messages m\n WHERE m.wa_id = $1 AND m.direction = 'in' AND m.text_body ~* '\\mref[\\s:#-]*[A-Za-z0-9]{6}\\M'\n ORDER BY m.meta_timestamp DESC LIMIT 1",
+        "options": {
+          "queryReplacement": "={{ [ $('Preparar').first().json.wa_id ] }}"
+        }
+      }
+    },
+    {
+      "id": "t4c",
+      "name": "Buscar empresa por código",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        480
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3Gt2bO1d28OiwA5s",
+          "name": "Twenty CRM (Bearer)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "alwaysOutputData": true,
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "url": "=http://twenty-server:3000/rest/companies?limit=1&depth=0&filter={{ encodeURIComponent('codigoRef[eq]:\"' + ($json.ref || '-') + '\"') }}"
+      }
+    },
+    {
       "id": "t5",
       "name": "Datos de la persona",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
-        300
+        1100,
+        480
       ],
       "parameters": {
-        "jsCode": "// Why Code: decidir si la persona se crea o se actualiza (upsert por id) sin pisar lo que ya tiene.\nconst p = $('Preparar').first().json;\nconst found = ($('Buscar persona').first().json.data?.people || [])[0];\nconst company = ($('Buscar empresa').first().json.data?.companies || [])[0];\nconst LEVEL = { encaja: 'ALTO', dudoso: 'MEDIO', no_califica: 'BAJO' };\nconst companyId = found?.companyId || company?.id || null;\nconst [firstName = '', ...rest] = String(p.name || '').trim().split(/\\s+/);\nconst body = found ? { id: found.id } : {\n  name: { firstName: firstName || 'WhatsApp', lastName: firstName ? rest.join(' ') : '+' + String(p.wa_id) },\n  phones: p.waPhone, canal: 'WHATSAPP', leadId: 'WA-' + p.wa_id,\n};\nif (found && p.name && (!found.name?.firstName || found.name.firstName === 'WhatsApp')) body.name = { firstName, lastName: rest.join(' ') };\nif (!found?.companyId && companyId) body.companyId = companyId;\nif (!found || ['SIN_TRABAJAR', 'DESCARTADA', '', null, undefined].includes(found.estado)) body.estado = 'EN_PROCESO';\nif (p.diag?.qualification && LEVEL[p.diag.qualification]) body.nivel = LEVEL[p.diag.qualification];\nreturn [{ json: { body, isNew: !found, companyId, companyEstado: company?.id === companyId ? company?.estado : null } }];"
+        "jsCode": "// Why Code: decidir si la persona se crea o se actualiza (upsert por id) sin pisar lo que ya tiene.\n// Empresa, de más a menos segura: código de campaña > la que ya tiene la persona > la que tiene su teléfono.\nconst p = $('Preparar').first().json;\nconst found = ($('Buscar persona').first().json.data?.people || [])[0];\nconst ref = $('Buscar código de campaña').first().json.ref || '';\nconst byRef = ref ? ($('Buscar empresa por código').first().json.data?.companies || [])[0] : null;\nconst byPhone = ($('Buscar empresa').first().json.data?.companies || [])[0];\nconst LEVEL = { encaja: 'ALTO', dudoso: 'MEDIO', no_califica: 'BAJO' };\nconst companyId = byRef?.id || found?.companyId || byPhone?.id || null;\nconst company = [byRef, byPhone].find((c) => c?.id && c.id === companyId) || null;\nconst matchedBy = byRef ? 'código de campaña ' + ref : (!found?.companyId && byPhone ? 'teléfono de la empresa' : '');\nconst matchNote = (matchedBy || ref ? '\\n' : '') + (matchedBy ? '\\n- Empresa del CRM encontrada por: ' + matchedBy : '')\n  + (ref ? '\\n- Llegó por un enlace de campaña (ref ' + ref + ')' + (byRef ? '' : ': ningún código coincide en el CRM') : '');\nconst [firstName = '', ...rest] = String(p.name || '').trim().split(/\\s+/);\nconst body = found ? { id: found.id } : {\n  name: { firstName: firstName || 'WhatsApp', lastName: firstName ? rest.join(' ') : '+' + String(p.wa_id) },\n  phones: p.waPhone, canal: 'WHATSAPP', leadId: 'WA-' + p.wa_id,\n};\nif (found && p.name && (!found.name?.firstName || found.name.firstName === 'WhatsApp')) body.name = { firstName, lastName: rest.join(' ') };\nif (companyId && found?.companyId !== companyId) body.companyId = companyId;\nif (!found || ['SIN_TRABAJAR', 'DESCARTADA', '', null, undefined].includes(found.estado)) body.estado = 'EN_PROCESO';\nif (p.diag?.qualification && LEVEL[p.diag.qualification]) body.nivel = LEVEL[p.diag.qualification];\nreturn [{ json: { body, isNew: !found, companyId, company, companyEstado: company ? company.estado : null, ref, matchNote } }];"
       }
     },
     {
@@ -201,7 +256,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// Why Code: armar la oportunidad (nueva en «Nuevo» o la abierta) según venga del diagnóstico o del asesor.\nconst p = $('Preparar').first().json;\nconst person = $('Guardar persona').first().json.data.createPerson;\nconst plan = $('Datos de la persona').first().json;\nconst open = ($('Buscar oportunidad abierta').first().json.data?.opportunities || [])[0];\nconst name = [person.name?.firstName, person.name?.lastName].filter(Boolean).join(' ');\nconst company = ($('Buscar empresa').first().json.data?.companies || [])[0];\nconst body = open ? { id: open.id } : {\n  name: (company?.id && company.id === plan.companyId ? company.name : name) + ' · Comercial', proceso: 'COMERCIAL', etapaComercial: 'NUEVO',\n  ...(plan.companyId ? { companyId: plan.companyId } : {}),\n};\n// La abierta se creó antes de saber el nombre («WhatsApp +57…»): ahora que lo sabemos, se renombra.\nif (open && /^WhatsApp \\+/.test(open.name || '') && name && !name.startsWith('WhatsApp')) body.name = name + ' · Comercial';\nbody.pointOfContactId = person.id;\nbody.fechaProximaAccion = new Date().toISOString();\nif (p.source === 'asesor') {\n  const call = p.contact_channel === 'phone_call' || p.contact_channel === 'whatsapp_call';\n  body.contactarPor = call ? 'LLAMADA' : 'WHATSAPP';\n  body.telefonoContacto = p.contactPhone;\n  body.proximaAccion = ({ phone_call: 'Llamar al celular', whatsapp_call: 'Llamar por WhatsApp', chat: 'Escribir por WhatsApp' }[p.contact_channel] || 'Contactar')\n    + ' al ' + p.contactE164 + ' (pidió un asesor por WhatsApp)';\n} else {\n  body.proximaAccion = 'Escribir por WhatsApp al ' + p.contactE164 + ' (hizo el diagnóstico por WhatsApp)';\n  if (!open) { body.contactarPor = 'WHATSAPP'; body.telefonoContacto = p.waPhone; }\n}\nif (p.diag) {\n  if (p.diag.dolor) body.diagDolorPrincipal = p.diag.dolor;\n  if (p.diag.ahorroUsd) body.diagAhorroAnualUsd = Number(p.diag.ahorroUsd);\n  if (p.diag.plazoPais) body.diagPresupuestoPlazo = p.diag.plazoPais;\n}\nreturn [{ json: { body, reused: !!open, personId: person.id, leadId: person.leadId || '', personName: name } }];"
+        "jsCode": "// Why Code: armar la oportunidad (nueva en «Nuevo» o la abierta) según venga del diagnóstico o del asesor.\nconst p = $('Preparar').first().json;\nconst person = $('Guardar persona').first().json.data.createPerson;\nconst plan = $('Datos de la persona').first().json;\nconst open = ($('Buscar oportunidad abierta').first().json.data?.opportunities || [])[0];\nconst name = [person.name?.firstName, person.name?.lastName].filter(Boolean).join(' ');\nconst company = plan.company;\nconst body = open ? { id: open.id } : {\n  name: (company?.name || name) + ' · Comercial', proceso: 'COMERCIAL', etapaComercial: 'NUEVO',\n  ...(plan.companyId ? { companyId: plan.companyId } : {}),\n};\n// La abierta se creó antes de saber el nombre («WhatsApp +57…»): ahora que lo sabemos, se renombra.\nif (open && /^WhatsApp \\+/.test(open.name || '') && name && !name.startsWith('WhatsApp')) body.name = name + ' · Comercial';\nbody.pointOfContactId = person.id;\nbody.fechaProximaAccion = new Date().toISOString();\nif (p.source === 'asesor') {\n  const call = p.contact_channel === 'phone_call' || p.contact_channel === 'whatsapp_call';\n  body.contactarPor = call ? 'LLAMADA' : 'WHATSAPP';\n  body.telefonoContacto = p.contactPhone;\n  body.proximaAccion = ({ phone_call: 'Llamar al celular', whatsapp_call: 'Llamar por WhatsApp', chat: 'Escribir por WhatsApp' }[p.contact_channel] || 'Contactar')\n    + ' al ' + p.contactE164 + ' (pidió un asesor por WhatsApp)';\n} else {\n  body.proximaAccion = 'Escribir por WhatsApp al ' + p.contactE164 + ' (hizo el diagnóstico por WhatsApp)';\n  if (!open) { body.contactarPor = 'WHATSAPP'; body.telefonoContacto = p.waPhone; }\n}\nif (p.diag) {\n  if (p.diag.dolor) body.diagDolorPrincipal = p.diag.dolor;\n  if (p.diag.ahorroUsd) body.diagAhorroAnualUsd = Number(p.diag.ahorroUsd);\n  if (p.diag.plazoPais) body.diagPresupuestoPlazo = p.diag.plazoPais;\n}\nreturn [{ json: { body, reused: !!open, personId: person.id, leadId: person.leadId || '', personName: name } }];"
       }
     },
     {
@@ -343,7 +398,7 @@
         "url": "http://twenty-server:3000/rest/notes",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ title: $('Preparar').first().json.note_title || 'WhatsApp', bodyV2: { markdown: $('Preparar').first().json.note || '', blocknote: null } }) }}"
+        "jsonBody": "={{ JSON.stringify({ title: $('Preparar').first().json.note_title || 'WhatsApp', bodyV2: { markdown: ($('Preparar').first().json.note || '') + $('Datos de la persona').first().json.matchNote, blocknote: null } }) }}"
       }
     },
     {
@@ -442,7 +497,7 @@
       "parameters": {
         "width": 1000,
         "height": 280,
-        "content": "## FLOW · Registrar en Twenty\nEntradas: `source` (diagnostico | asesor), `wa_id`, `name`, `contact_channel` (chat | whatsapp_call | phone_call), `contact_phone`, `note_title`, `note` (markdown), `diag` ({ dolor, ahorroUsd, plazoPais, qualification }).\n1. Persona por teléfono (si no existe: se crea con Lead ID `WA-<número>`, canal WhatsApp, y se liga a la empresa importada que tenga ese teléfono).\n2. Oportunidad del embudo **Comercial**: reusa la abierta (de la persona o su empresa) o abre una en **Nuevo**, con contacto, próxima acción y campos del diagnóstico.\n3. Empresa *Sin trabajar*/*Descartada* → *En proceso*. Nota en la oportunidad.\nDevuelve `{ personId, leadId, opportunityId, opportunityUrl, isNewPerson, reused }`. Twenty: `http://twenty-server:3000` (red interna)."
+        "content": "## FLOW · Registrar en Twenty\nEntradas: `source` (diagnostico | asesor), `wa_id`, `name`, `contact_channel` (chat | whatsapp_call | phone_call), `contact_phone`, `note_title`, `note` (markdown), `diag` ({ dolor, ahorroUsd, plazoPais, qualification }).\n1. Empresa: la del código de campaña que escribió (`ref XXXXXX` en el chat → Company.codigoRef), si no la que ya tiene la persona, si no la que tenga su teléfono. Persona por teléfono (si no existe: se crea con Lead ID `WA-<número>`, canal WhatsApp) ligada a esa empresa.\n2. Oportunidad del embudo **Comercial**: reusa la abierta (de la persona o su empresa) o abre una en **Nuevo**, con contacto, próxima acción y campos del diagnóstico.\n3. Empresa *Sin trabajar*/*Descartada* → *En proceso*. Nota en la oportunidad.\nDevuelve `{ personId, leadId, opportunityId, opportunityUrl, isNewPerson, reused }`. Twenty: `http://twenty-server:3000` (red interna)."
       }
     }
   ],
@@ -481,6 +536,28 @@
       ]
     },
     "Buscar empresa": {
+      "main": [
+        [
+          {
+            "node": "Buscar código de campaña",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar código de campaña": {
+      "main": [
+        [
+          {
+            "node": "Buscar empresa por código",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar empresa por código": {
       "main": [
         [
           {

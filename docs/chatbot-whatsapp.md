@@ -340,9 +340,12 @@ Sub-workflow que usan el diagnóstico y la solicitud de asesor (mismo criterio q
 `automaverso-web/server/services/contact.ts`). Twenty se llama por la red interna del VPS
 (`http://twenty-server:3000/rest`, sin Cloudflare Access) con la credencial `Twenty CRM (Bearer)`.
 Generador: `scripts/twenty-workflow.mjs`.
-1. **Persona** por teléfono (`phones.primaryPhoneNumber`). Si no existe se crea con Lead ID `WA-<número>`,
-   canal *WhatsApp*, estado *En proceso*; si el número coincide con el teléfono de una **empresa importada**
-   (p. ej. lote RUES), la persona queda ligada a esa empresa. Si dice su nombre después, se completa.
+1. **Empresa**, de más a menos segura: el **código de campaña** que escribió en el chat (los enlaces de los
+   correos abren WhatsApp con «… (ref XXXXXX)»; se busca el último `ref` en `chatbot.messages` y se cruza con
+   `Company.codigoRef`), la que ya tiene la persona, o la **empresa importada** (p. ej. lote RUES) con el mismo
+   teléfono. La nota dice cómo se encontró.
+   **Persona** por teléfono (`phones.primaryPhoneNumber`). Si no existe se crea con Lead ID `WA-<número>`,
+   canal *WhatsApp*, estado *En proceso*, ligada a esa empresa. Si dice su nombre después, se completa.
 2. **Oportunidad** del embudo *Comercial*: reusa la abierta de la persona o de su empresa; si no hay, abre una
    en *Nuevo* («<nombre o empresa> · Comercial»). Se actualizan contacto, próxima acción y campos del diagnóstico.
 3. La empresa ligada en *Sin trabajar* / *Descartada* pasa a *En proceso*.
